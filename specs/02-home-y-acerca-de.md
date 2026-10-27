@@ -1,6 +1,6 @@
 # SPEC 02 — Home (landing) y Acerca de
 
-> **Estado:** Aprobado
+> **Estado:** Implementado
 > **Depende de:** SPEC 01
 > **Fecha:** 2026-10-27
 > **Objetivo:** Portar a Next.js la landing (`/`) y la página Acerca de con contacto (`/acerca-de`) del template `references/templates/home-about/`, moviendo la Biblioteca a `/biblioteca`.
