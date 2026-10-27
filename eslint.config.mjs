@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Template de referencia (React UMD, no es código de la app).
+    "references/**",
   ]),
 ]);
 
