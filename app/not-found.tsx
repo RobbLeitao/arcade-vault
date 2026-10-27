@@ -18,7 +18,7 @@ export default function NotFound() {
       <p style={{ color: "var(--ink-dim)", marginBottom: 32 }}>
         Esta máquina no existe en el vault.
       </p>
-      <Link href="/" className="btn lg">
+      <Link href="/biblioteca" className="btn lg">
         VOLVER AL VAULT
       </Link>
     </div>

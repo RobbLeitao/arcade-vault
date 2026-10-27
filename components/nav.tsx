@@ -5,17 +5,19 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { useSession } from "@/lib/session";
 
-type NavName = "biblioteca" | "salon" | "auth";
+type NavName = "inicio" | "biblioteca" | "salon" | "about" | "auth";
 
 function activeFor(pathname: string): NavName | null {
+  if (pathname === "/") return "inicio";
   if (
-    pathname === "/" ||
+    pathname === "/biblioteca" ||
     pathname.startsWith("/juegos/") ||
     pathname.startsWith("/jugar/")
   ) {
     return "biblioteca";
   }
   if (pathname === "/salon-de-la-fama") return "salon";
+  if (pathname === "/acerca-de") return "about";
   if (pathname === "/acceso") return "auth";
   return null;
 }
@@ -38,11 +40,17 @@ export default function Nav() {
           </div>
         </Link>
         <div className="links">
-          <Link href="/" className={cls("biblioteca")}>
+          <Link href="/" className={cls("inicio")}>
+            Inicio
+          </Link>
+          <Link href="/biblioteca" className={cls("biblioteca")}>
             Biblioteca
           </Link>
           <Link href="/salon-de-la-fama" className={cls("salon")}>
             Salón de la Fama
+          </Link>
+          <Link href="/acerca-de" className={cls("about")}>
+            Acerca de
           </Link>
         </div>
         <div className="spacer"></div>
@@ -79,7 +87,10 @@ export default function Nav() {
         >
           MENÚ
         </div>
-        <Link href="/" className={cls("biblioteca")} onClick={close}>
+        <Link href="/" className={cls("inicio")} onClick={close}>
+          Inicio
+        </Link>
+        <Link href="/biblioteca" className={cls("biblioteca")} onClick={close}>
           Biblioteca
         </Link>
         <Link
@@ -88,6 +99,9 @@ export default function Nav() {
           onClick={close}
         >
           Salón de la Fama
+        </Link>
+        <Link href="/acerca-de" className={cls("about")} onClick={close}>
+          Acerca de
         </Link>
         <Link href="/acceso" className={cls("auth")} onClick={close}>
           {user ? "Cuenta" : "Iniciar Sesión"}
