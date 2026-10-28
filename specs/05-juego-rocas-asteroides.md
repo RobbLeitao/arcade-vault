@@ -1,6 +1,6 @@
 # SPEC 05 — Primer juego real: ROCAS (Asteroids)
 
-> **Estado:** Aprobado
+> **Estado:** Implementado
 > **Depende de:** SPEC 01, SPEC 04
 > **Fecha:** 2026-10-28
 > **Objetivo:** Portar el juego Asteroids de `references/started-games/02-asteroids` a un módulo TypeScript y montarlo en `/jugar/rocas`, con el HUD, la pausa y el modal de fin de partida de la plataforma, en lugar de la simulación actual.

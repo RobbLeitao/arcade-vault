@@ -116,7 +116,7 @@ export default function GamePlayer({ game }: { game: Game }) {
         </div>
       </div>
 
-      <div className="crt">
+      <div className={isRocas ? "crt crt-fit" : "crt"}>
         <div className="crt-screen">
           {isRocas ? (
             <AsteroidsCanvas

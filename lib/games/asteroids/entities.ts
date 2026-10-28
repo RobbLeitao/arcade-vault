@@ -66,10 +66,11 @@ export class Bullet {
 
   draw(ctx: CanvasRenderingContext2D, palette: Palette) {
     ctx.save();
-    glow(ctx, palette.bullet);
+    glow(ctx, palette.bullet, 12);
     ctx.fillStyle = palette.bullet;
     ctx.beginPath();
-    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+    // Un poco más grande que el radio de colisión para que se vea con el brillo.
+    ctx.arc(this.x, this.y, this.radius + 0.75, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }
@@ -129,9 +130,9 @@ export class Asteroid {
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.rot);
-    glow(ctx, palette.rock);
+    glow(ctx, palette.rock, 9);
     ctx.strokeStyle = palette.rock;
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = 1.75;
     ctx.lineJoin = "round";
     ctx.beginPath();
     ctx.moveTo(this.verts[0][0], this.verts[0][1]);
@@ -271,9 +272,10 @@ export class Ship {
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.angle);
-    glow(ctx, palette.ship, 10);
+    // La nave es lo más brillante de la pantalla.
+    glow(ctx, palette.ship, 16);
     ctx.strokeStyle = palette.ship;
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = 2;
     ctx.lineJoin = "round";
 
     // Silueta clásica: triángulo con muesca trasera
@@ -331,8 +333,9 @@ export class Particle {
   draw(ctx: CanvasRenderingContext2D, palette: Palette) {
     ctx.save();
     ctx.globalAlpha = Math.max(this.ttl / this.life, 0);
+    glow(ctx, palette.spark, 6);
     ctx.strokeStyle = palette.spark;
-    ctx.lineWidth = 1;
+    ctx.lineWidth = 1.25;
     ctx.beginPath();
     ctx.moveTo(this.x, this.y);
     ctx.lineTo(this.x - this.vx * 0.05, this.y - this.vy * 0.05);
