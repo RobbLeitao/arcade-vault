@@ -11,12 +11,14 @@ import {
   TOP_TODAY,
 } from "@/lib/home";
 import { useReveal } from "@/hooks/use-reveal";
+import { useSession } from "@/lib/session";
 import FeatureIcon from "./feature-icon";
 import FloatingSilhouettes from "./floating-silhouettes";
 import MiniCard from "./mini-card";
 
 export default function HomePage() {
   useReveal();
+  const { user } = useSession();
 
   return (
     <div className="home fade-in">
@@ -41,9 +43,11 @@ export default function HomePage() {
             <Link href="/biblioteca" className="btn xl pulse">
               ▶ EXPLORAR JUEGOS
             </Link>
-            <Link href="/acceso" className="btn xl magenta">
-              ✦ CREAR CUENTA
-            </Link>
+            {!user && (
+              <Link href="/acceso" className="btn xl magenta">
+                ✦ CREAR CUENTA
+              </Link>
+            )}
           </div>
           <div className="hero-scroll" aria-hidden="true">
             <span>DESLIZA</span>
@@ -187,11 +191,11 @@ export default function HomePage() {
               ))}
             </ul>
             <Link
-              href="/acceso"
+              href={user ? "/biblioteca" : "/acceso"}
               className="btn xl pulse"
               style={{ width: "100%" }}
             >
-              EMPEZAR GRATIS →
+              {user ? "JUGAR AHORA →" : "EMPEZAR GRATIS →"}
             </Link>
             <div className="pc-foot">No pedimos tarjeta. Nunca lo haremos.</div>
             <div className="pc-stamp pixel">

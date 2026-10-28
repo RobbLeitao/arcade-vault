@@ -1,6 +1,6 @@
 # SPEC 04 — Supabase: cimientos y autenticación real
 
-> **Estado:** Aprobado
+> **Estado:** Implementado
 > **Depende de:** SPEC 01, SPEC 02
 > **Fecha:** 2026-10-28
 > **Objetivo:** Conectar la app a Supabase (clientes SSR y refresco de sesión) y reemplazar el login simulado de `/acceso` por Supabase Auth con correo y contraseña, Google y GitHub, más un perfil con nombre de jugador único.
@@ -26,9 +26,10 @@ Hoy el "login" de `lib/session.tsx` solo guarda un nombre en `localStorage` (`av
 - Inicio de sesión con Google y GitHub (OAuth) mediante `/auth/callback`.
 - Nombre de jugador autogenerado para quien entra con OAuth (ver Modelo de datos).
 - Confirmación de correo activada: tras registrarse con correo se muestra un aviso y no se inicia sesión hasta confirmar.
-- Cierre de sesión real desde el nav.
+- Cierre de sesión real desde el nav: el botón con el nombre del usuario despliega un menú con el botón "CERRAR SESIÓN" (también disponible en el panel móvil).
 - `lib/session.tsx` reescrito sobre Supabase manteniendo `user.name`, `signOut` y `saveScore`.
 - `components/auth-form.tsx` conectado a Supabase, con estados de carga y error.
+- En la Home (`/`), con sesión iniciada se ocultan los CTAs de registro: desaparece "✦ CREAR CUENTA" del hero y "EMPEZAR GRATIS →" de la tarjeta de precios pasa a "JUGAR AHORA →" y lleva a `/biblioteca`. Sin sesión se ven como antes.
 - "JUGAR COMO INVITADO" se mantiene como sesión sin Supabase (ver Decisiones).
 
 **Fuera de alcance (para futuras specs):**
@@ -114,7 +115,7 @@ Convenciones:
 - Si el nombre ya existe en el registro con correo, el trigger falla y la UI muestra `ESE USUARIO YA EXISTE`.
 - La sesión del cliente se obtiene con `supabase.auth.getUser()` al montar y se mantiene con `onAuthStateChange`. En servidor se usa siempre `getUser()`, nunca `getSession()` sin verificar.
 - Solo la clave publishable se usa en la app. La clave `service_role` no se añade a ningún archivo de la app.
-- Redirección tras entrar (correo u OAuth): `/biblioteca`. El callback de OAuth y el enlace de confirmación usan `/auth/callback?next=/biblioteca`.
+- Redirección tras entrar (correo u OAuth): `/` (inicio). El callback de OAuth y el enlace de confirmación usan `/auth/callback?next=/`. "JUGAR COMO INVITADO" sigue llevando a `/biblioteca`, como en la SPEC 02.
 - Textos de la UI en español, en el estilo de la SPEC 02.
 
 Mensajes de error fijos (en mayúsculas, sin revelar detalles internos):
@@ -137,7 +138,7 @@ Antes de empezar, leer en `node_modules/next/dist/docs/` las guías `01-app/02-g
 3. Crear `lib/supabase/proxy.ts` y `proxy.ts` en la raíz: refresca la sesión y propaga las cookies, sin redirigir. Verificación: `npm run build` compila, todas las rutas existentes responden como antes y no hay warnings de Cache Components.
 4. Crear el archivo de migración en `supabase/migrations/` con `profiles`, índice único, RLS, política de lectura y trigger `handle_new_user`. Aplicarla al proyecto (MCP `apply_migration` o Supabase CLI) y ejecutar `get_advisors` de seguridad. Verificación: `list_tables` muestra `profiles` con RLS activo, el asesor de seguridad no reporta problemas nuevos y una inserción de prueba en `auth.users` (rama o usuario de prueba que luego se borra) crea el perfil esperado, incluida la colisión de nombres.
 5. Configurar Auth en el proyecto (pasos manuales de la persona dueña, documentados en el PR): Site URL `http://localhost:3000`, Redirect URLs con `http://localhost:3000/auth/callback`, confirmación de correo activada y proveedores Google y GitHub con sus claves (apps OAuth creadas en cada consola). Las claves secretas de OAuth viven solo en el dashboard de Supabase. Verificación: el dashboard muestra ambos proveedores habilitados.
-6. Crear `app/auth/callback/route.ts`: intercambia el `code` por sesión (`exchangeCodeForSession`) y redirige a `next` (solo rutas relativas internas; cualquier otro valor cae en `/biblioteca`). Ante error redirige a `/acceso?error=oauth`. Verificación: compila.
+6. Crear `app/auth/callback/route.ts`: intercambia el `code` por sesión (`exchangeCodeForSession`) y redirige a `next` (solo rutas relativas internas; cualquier otro valor cae en `/`). Ante error redirige a `/acceso?error=oauth`. Verificación: compila.
 7. Reescribir `lib/session.tsx`: `SessionProvider` usa el cliente de navegador, carga el usuario y su `profiles.username`, escucha `onAuthStateChange` y expone `user`, `signOut` (cierra sesión en Supabase) y `saveScore` sin cambios. Quitar `signIn` y la clave `av_user`. Actualizar los consumidores que lo requieran (`components/nav.tsx`, `components/auth-form.tsx`). Verificación: `/biblioteca` y `/salon-de-la-fama` cargan sin sesión y sin errores en consola, y el nav muestra "Iniciar Sesión".
 8. Conectar `components/auth-form.tsx`: login con `signInWithPassword`, registro con `signUp` (con `options.data.username` y `emailRedirectTo`), botones GOOGLE y GITHUB con `signInWithOAuth`, `AuthState` con botón deshabilitado y texto de carga, errores con `role="alert"` y mensajes fijos, y vista "REVISA TU CORREO" tras registrarse. "JUGAR COMO INVITADO" llama a `signOut` si hay sesión y navega a `/biblioteca`. Las clases visuales se reutilizan; si hace falta una clase nueva (línea de error, vista de confirmación), se añade al final de `app/globals.css` sin tocar reglas existentes. Verificación: el flujo completo de correo y contraseña funciona de punta a punta en el navegador.
 9. Verificar OAuth con Google y GitHub y el cierre de sesión desde el nav. Revisión visual de `/acceso` a 1280 px y 390 px (estados idle, carga, error y confirmación).
@@ -151,19 +152,20 @@ Antes de empezar, leer en `node_modules/next/dist/docs/` las guías `01-app/02-g
 - [ ] `supabase/migrations/` contiene la migración y `list_tables` muestra `profiles` con RLS activo.
 - [ ] El asesor de seguridad de Supabase (`get_advisors`) no reporta avisos de seguridad nuevos tras la migración.
 - [ ] Registrarse con usuario `px_kai`, correo y contraseña de 8+ caracteres muestra "REVISA TU CORREO" y no inicia sesión.
-- [ ] Tras confirmar el correo, el enlace lleva a `/biblioteca` con la sesión iniciada y el nav muestra `PX_KAI`.
+- [ ] Tras confirmar el correo, el enlace lleva a `/` con la sesión iniciada y el nav muestra `PX_KAI`.
 - [ ] En `profiles` existe una fila con `id` igual al de `auth.users` y `username = 'PX_KAI'`.
-- [ ] Iniciar sesión con ese correo y la contraseña correcta lleva a `/biblioteca` con el nombre `PX_KAI` en el nav.
+- [ ] Iniciar sesión con ese correo y la contraseña correcta lleva a `/` con el nombre `PX_KAI` en el nav.
 - [ ] Iniciar sesión con contraseña incorrecta muestra `CORREO O CONTRASEÑA INCORRECTOS` y no revela si el correo existe.
 - [ ] Iniciar sesión sin haber confirmado el correo muestra `CONFIRMA TU CORREO ANTES DE ENTRAR`.
 - [ ] Registrar un segundo usuario `PX_KAI` (en cualquier combinación de mayúsculas) muestra `ESE USUARIO YA EXISTE` y no crea cuenta.
 - [ ] Un usuario de 2 caracteres o con espacios se rechaza en el cliente con `USUARIO: 3 A 10 CARACTERES (A-Z, 0-9, _)` y sin petición de red.
-- [ ] Entrar con Google y con GitHub crea sesión, redirige a `/biblioteca` y crea un perfil con nombre que cumple `^[A-Z0-9_]{3,10}$`.
+- [ ] Entrar con Google y con GitHub crea sesión, redirige a `/` y crea un perfil con nombre que cumple `^[A-Z0-9_]{3,10}$`.
 - [ ] Dos cuentas OAuth cuyo nombre derivado coincida reciben nombres distintos (el segundo con sufijo numérico) y ambas entran sin error.
-- [ ] "CERRAR SESIÓN" en el nav cierra la sesión en Supabase: tras recargar, el nav muestra "Iniciar Sesión" y no quedan cookies `sb-*` de sesión.
+- [ ] Pulsar el nombre del usuario en el nav despliega un menú con el botón "CERRAR SESIÓN" (se cierra con Escape o al hacer clic fuera). Al pulsarlo se cierra la sesión en Supabase: tras recargar, el nav muestra "Iniciar Sesión" y no quedan cookies `sb-*` de sesión.
 - [ ] Recargar `/biblioteca` con sesión iniciada mantiene al usuario (cookies y `proxy.ts` funcionando).
+- [ ] Con sesión iniciada, la Home no muestra "✦ CREAR CUENTA" y el botón de la tarjeta de precios dice "JUGAR AHORA →" y lleva a `/biblioteca`, salvo el instante previo a cargar la sesión (ver Problemas conocidos). Sin sesión se muestran "✦ CREAR CUENTA" y "EMPEZAR GRATIS →" como antes.
 - [ ] "JUGAR COMO INVITADO" lleva a `/biblioteca` sin sesión de Supabase y sin errores.
-- [ ] `/auth/callback?next=https://ejemplo.com` redirige a `/biblioteca`, no al sitio externo.
+- [ ] `/auth/callback?next=https://ejemplo.com` redirige a `/`, no al sitio externo.
 - [ ] Un usuario autenticado no puede hacer `insert`, `update` ni `delete` sobre `profiles` con la clave publishable (RLS lo rechaza), y cualquiera puede leer los nombres.
 - [ ] Buscar `service_role` y secretos de OAuth en `.next/static`, `.env.example` y el código no da ningún resultado.
 - [ ] La consola del navegador no muestra errores ni warnings en `/`, `/acceso` y `/biblioteca`, y a 390 px `/acceso` no tiene scroll horizontal.
@@ -187,6 +189,9 @@ Antes de empezar, leer en `node_modules/next/dist/docs/` las guías `01-app/02-g
 - **Sí:** confirmación de correo activada. Es lo correcto para producción, aunque en desarrollo exige un buzón real y el SMTP por defecto de Supabase tiene un límite bajo de envíos por hora.
 - **Sí:** el trigger es `security definer` con `search_path` fijo y los perfiles no tienen políticas de escritura. Nadie puede crear o editar perfiles desde el cliente.
 - **Sí:** lectura pública de `profiles`. El nombre de jugador es público por diseño (Salón de la Fama).
+- **Sí:** con sesión iniciada, la Home oculta los CTAs de registro. Ofrecer "CREAR CUENTA" a quien ya tiene cuenta confunde. Decisión añadida durante la implementación: el botón del hero se quita y el de la tarjeta de precios se reemplaza por "JUGAR AHORA →", para no dejar un botón de registro ni un hueco. Efecto secundario aceptado: como la sesión se carga en el cliente, el HTML inicial prerenderizado puede mostrar el botón un instante antes de hidratar.
+- **Sí:** tras entrar (correo, confirmación u OAuth) se redirige a `/` y no a `/biblioteca`. Decisión añadida durante la implementación: el inicio es la puerta de entrada natural y ya enlaza a la Biblioteca. "JUGAR COMO INVITADO" no cambia porque no es un inicio de sesión.
+- **Sí:** el cierre de sesión es un botón "CERRAR SESIÓN" dentro de un menú que se despliega desde el nombre del usuario. Antes, pulsar el nombre cerraba la sesión sin aviso. Es un menú de un solo botón, sin rol `menu`, y se cierra con Escape o al hacer clic fuera.
 - **Sí:** `useSession()` mantiene `user.name`, `signOut` y `saveScore`. Así `nav`, `game-player` y `hall-of-fame` casi no cambian. Se elimina `signIn` porque ya no tiene sentido crear sesión desde el cliente.
 - **Sí:** `saveScore` sigue en `localStorage`. Mover las puntuaciones a Supabase es otra spec.
 - **Sí:** "JUGAR COMO INVITADO" sigue sin cuenta y sin Supabase. Es lo menos invasivo y no ensucia `auth.users` con usuarios anónimos.
@@ -213,6 +218,14 @@ Antes de empezar, leer en `node_modules/next/dist/docs/` las guías `01-app/02-g
 | Sesiones locales antiguas (`av_user`) quedan en `localStorage`                                                                          | Al montar se borra la clave `av_user` obsoleta. Las puntuaciones `av_scores` no se tocan.                                                                                                   |
 | El nombre derivado de OAuth puede ser ofensivo o confuso                                                                                | Aceptado para esta spec. Editar el nombre queda para otra.                                                                                                                                  |
 | Next no recarga `.env.local` en un dev server ya iniciado                                                                               | Reiniciar `npm run dev` tras crear o cambiar las variables.                                                                                                                                 |
+
+---
+
+## Problemas conocidos
+
+- **Parpadeo de los CTAs de registro en la Home al recargar con sesión iniciada.** La sesión se carga en el cliente (`SessionProvider`, efecto con `getUser()`), pero el HTML inicial se prerenderiza como invitado. Hasta que la página hidrata y la sesión carga, un usuario con sesión ve un instante "✦ CREAR CUENTA" y "EMPEZAR GRATIS →". Es cosmético: no afecta a la sesión ni a la seguridad. Lo observó la persona dueña del proyecto y no se midió su duración.
+  - **Estado:** conocido y aceptado en esta spec.
+  - **Posible solución futura:** leer la sesión en el servidor (cookies) y pasarla al `SessionProvider` como valor inicial. Obliga a revisar la compatibilidad con Cache Components y el prerenderizado de las páginas, por eso queda para otra spec.
 
 ---
 

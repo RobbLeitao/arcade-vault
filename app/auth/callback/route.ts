@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-const DEFAULT_NEXT = "/biblioteca";
+const DEFAULT_NEXT = "/";
 
 // Solo rutas internas relativas: empieza por "/" pero no por "//" ni "/\"
 // (que el navegador interpretaría como otro sitio).
