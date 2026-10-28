@@ -4,10 +4,12 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
-  useSyncExternalStore,
+  useState,
   type ReactNode,
 } from "react";
+import { createClient } from "@/lib/supabase/client";
 
 export interface SessionUser {
   name: string;
@@ -22,79 +24,60 @@ export interface ScoreEntry {
 
 interface SessionContextValue {
   user: SessionUser | null;
-  signIn: (name: string) => void;
-  signOut: () => void;
+  signOut: () => Promise<void>;
   saveScore: (entry: Omit<ScoreEntry, "at">) => void;
 }
 
-const USER_KEY = "av_user";
+const LEGACY_USER_KEY = "av_user";
 const SCORES_KEY = "av_scores";
 
 const SessionContext = createContext<SessionContextValue | null>(null);
 
-// Store mínimo sobre localStorage. El snapshot es el string crudo (estable
-// entre lecturas); en servidor y en la hidratación es null = invitado.
-const listeners = new Set<() => void>();
-
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-  window.addEventListener("storage", listener);
-  return () => {
-    listeners.delete(listener);
-    window.removeEventListener("storage", listener);
-  };
-}
-
-function emit() {
-  listeners.forEach((l) => l());
-}
-
-function getSnapshot(): string | null {
-  try {
-    return localStorage.getItem(USER_KEY);
-  } catch {
-    return null;
-  }
-}
-
-function getServerSnapshot(): string | null {
-  return null;
-}
-
-function parseUser(raw: string | null): SessionUser | null {
-  if (!raw) return null;
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (
-      parsed &&
-      typeof parsed === "object" &&
-      typeof (parsed as SessionUser).name === "string"
-    ) {
-      return { name: (parsed as SessionUser).name };
-    }
-  } catch {}
-  return null;
-}
-
 export function SessionProvider({ children }: { children: ReactNode }) {
-  const raw = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
-  const user = useMemo(() => parseUser(raw), [raw]);
+  // Servidor y primer render: invitado. El usuario real se carga en el efecto.
+  const [user, setUser] = useState<SessionUser | null>(null);
+  const supabase = useMemo(() => createClient(), []);
 
-  const signIn = useCallback((name: string) => {
-    const clean = name.trim().toUpperCase().slice(0, 10);
-    if (!clean) return;
-    try {
-      localStorage.setItem(USER_KEY, JSON.stringify({ name: clean }));
-    } catch {}
-    emit();
-  }, []);
+  useEffect(() => {
+    let active = true;
 
-  const signOut = useCallback(() => {
+    // Sesión simulada de antes de Supabase: ya no se usa.
     try {
-      localStorage.removeItem(USER_KEY);
+      localStorage.removeItem(LEGACY_USER_KEY);
     } catch {}
-    emit();
-  }, []);
+
+    const load = async (userId: string | null) => {
+      if (!userId) {
+        if (active) setUser(null);
+        return;
+      }
+      const { data } = await supabase
+        .from("profiles")
+        .select("username")
+        .eq("id", userId)
+        .maybeSingle();
+      if (active) setUser(data ? { name: data.username } : null);
+    };
+
+    supabase.auth.getUser().then(({ data }) => load(data.user?.id ?? null));
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      // Diferido: dentro de este callback no se debe llamar a Supabase.
+      setTimeout(() => load(session?.user.id ?? null), 0);
+    });
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, [supabase]);
+
+  const signOut = useCallback(async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+  }, [supabase]);
 
   const saveScore = useCallback((entry: Omit<ScoreEntry, "at">) => {
     try {
@@ -107,8 +90,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, signIn, signOut, saveScore }),
-    [user, signIn, signOut, saveScore],
+    () => ({ user, signOut, saveScore }),
+    [user, signOut, saveScore],
   );
 
   return (
@@ -118,6 +101,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
 export function useSession(): SessionContextValue {
   const ctx = useContext(SessionContext);
-  if (!ctx) throw new Error("useSession debe usarse dentro de <SessionProvider>");
+  if (!ctx)
+    throw new Error("useSession debe usarse dentro de <SessionProvider>");
   return ctx;
 }

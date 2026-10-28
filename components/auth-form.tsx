@@ -6,7 +6,7 @@ import { useSession } from "@/lib/session";
 
 export default function AuthForm() {
   const router = useRouter();
-  const { signIn, signOut } = useSession();
+  const { signOut } = useSession();
   const [tab, setTab] = useState<"in" | "up">("in");
   const [user, setUser] = useState("");
   const [pass, setPass] = useState("");
@@ -14,7 +14,7 @@ export default function AuthForm() {
 
   const submit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    signIn(user || "PLAYER1");
+    // Provisional hasta el paso 8: aún no autentica con Supabase.
     router.push("/biblioteca");
   };
 
