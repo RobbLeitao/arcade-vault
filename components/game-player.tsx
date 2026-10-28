@@ -1,7 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import AsteroidsCanvas, {
+  type AsteroidsHandle,
+} from "@/components/asteroids-canvas";
 import type { Game } from "@/lib/games";
 import { useSession } from "@/lib/session";
 
@@ -10,7 +13,13 @@ const POINTS_PER_LEVEL = 2500;
 
 export default function GamePlayer({ game }: { game: Game }) {
   const { user, saveScore } = useSession();
+  // ROCAS corre con su motor real; el resto de juegos sigue simulado.
+  const isRocas = game.id === "rocas";
+  const engineRef = useRef<AsteroidsHandle>(null);
   const [score, setScore] = useState(0);
+  const [lives, setLives] = useState(LIVES);
+  const [engineLevel, setEngineLevel] = useState(1);
+  const [powerUpLeft, setPowerUpLeft] = useState(0);
   const [paused, setPaused] = useState(false);
   const [over, setOver] = useState(false);
   const [typedName, setTypedName] = useState<string | null>(null);
@@ -19,22 +28,43 @@ export default function GamePlayer({ game }: { game: Game }) {
   // Hasta que el usuario edita el campo, el nombre sigue a la sesión
   // (que llega tras la hidratación).
   const name = typedName ?? user?.name ?? "INVITADO";
-  const level = 1 + Math.floor(score / POINTS_PER_LEVEL);
+  const level = isRocas
+    ? engineLevel
+    : 1 + Math.floor(score / POINTS_PER_LEVEL);
 
   useEffect(() => {
-    if (over || paused) return;
+    if (!isRocas) return;
+    if (paused) engineRef.current?.pause();
+    else engineRef.current?.resume();
+  }, [isRocas, paused]);
+
+  useEffect(() => {
+    if (isRocas || over || paused) return;
     const t = setInterval(
       () => setScore((s) => s + Math.floor(10 + Math.random() * 90)),
       220,
     );
     return () => clearInterval(t);
-  }, [over, paused]);
+  }, [isRocas, over, paused]);
 
   const restart = () => {
     setScore(0);
     setPaused(false);
     setOver(false);
     setSaved(false);
+    // El motor vuelve a emitir vidas, nivel y power-up al reiniciar.
+    engineRef.current?.restart();
+  };
+
+  const finish = () => {
+    if (isRocas) engineRef.current?.end();
+    else setOver(true);
+  };
+
+  const handleGameOver = (finalScore: number) => {
+    setScore(finalScore);
+    setPaused(false);
+    setOver(true);
   };
 
   const save = () => {
@@ -58,18 +88,26 @@ export default function GamePlayer({ game }: { game: Game }) {
           </div>
           <div className="hud-stat lives">
             <div className="l">Vidas</div>
-            <div className="v">{"♥ ".repeat(LIVES).trim() || "—"}</div>
+            <div className="v">{"♥ ".repeat(lives).trim() || "—"}</div>
           </div>
           <div className="hud-stat level">
             <div className="l">Nivel</div>
             <div className="v">{String(level).padStart(2, "0")}</div>
           </div>
+          {isRocas && powerUpLeft > 0 && (
+            <div className="hud-stat">
+              <div className="l">Triple</div>
+              <div className="v" style={{ color: "var(--magenta)" }}>
+                3x {powerUpLeft.toFixed(1)}s
+              </div>
+            </div>
+          )}
         </div>
         <div className="hud-actions">
           <button className="btn yellow" onClick={() => setPaused((p) => !p)}>
             {paused ? "REANUDAR" : "PAUSA"}
           </button>
-          <button className="btn magenta" onClick={() => setOver(true)}>
+          <button className="btn magenta" onClick={finish}>
             FIN
           </button>
           <Link href={`/juegos/${game.id}`} className="btn ghost">
@@ -78,15 +116,26 @@ export default function GamePlayer({ game }: { game: Game }) {
         </div>
       </div>
 
-      <div className="crt">
+      <div className={isRocas ? "crt crt-fit" : "crt"}>
         <div className="crt-screen">
-          <div className="game-arena">
-            <div className="grid-floor"></div>
-            <div className="enemy e1"></div>
-            <div className="enemy e2"></div>
-            <div className="enemy e3"></div>
-            <div className="player-ship"></div>
-          </div>
+          {isRocas ? (
+            <AsteroidsCanvas
+              ref={engineRef}
+              onScore={setScore}
+              onLives={setLives}
+              onLevel={setEngineLevel}
+              onPowerUp={setPowerUpLeft}
+              onGameOver={handleGameOver}
+            />
+          ) : (
+            <div className="game-arena">
+              <div className="grid-floor"></div>
+              <div className="enemy e1"></div>
+              <div className="enemy e2"></div>
+              <div className="enemy e3"></div>
+              <div className="player-ship"></div>
+            </div>
+          )}
           {paused && (
             <div
               className="crt-content"

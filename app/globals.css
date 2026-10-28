@@ -1337,3 +1337,16 @@ a { color: inherit; text-decoration: none; }
   .av-nav .user-menu { margin-left: 0; }
   .av-nav .user-menu .auth-btn { padding: 12px; gap: 6px; letter-spacing: 0.08em; }
 }
+
+/* juego ROCAS: canvas 800x600 escalado por CSS dentro de .crt-screen */
+.asteroids-canvas {
+  position: absolute; inset: 0;
+  display: block;
+  width: 100%; height: 100%;
+}
+
+/* ROCAS: el marco no supera el alto de la ventana para ver las 800x600 completas */
+.crt.crt-fit {
+  max-width: max(420px, calc((100dvh - 320px) * 4 / 3 + 48px));
+  margin-inline: auto;
+}
