@@ -2,20 +2,21 @@
 
 import { useMemo, useState } from "react";
 import GameCard from "@/components/game-card";
-import { CATS, GAMES } from "@/lib/games";
+import { CATS, type Game } from "@/lib/games";
 
-export default function Library() {
+// `games` es null cuando falló la lectura del catálogo.
+export default function Library({ games }: { games: Game[] | null }) {
   const [q, setQ] = useState("");
   const [cat, setCat] = useState<(typeof CATS)[number]>("TODOS");
 
   const filtered = useMemo(
     () =>
-      GAMES.filter(
+      (games ?? []).filter(
         (g) =>
           (cat === "TODOS" || g.cat === cat) &&
           g.title.toLowerCase().includes(q.toLowerCase()),
       ),
-    [q, cat],
+    [games, q, cat],
   );
 
   return (
@@ -53,7 +54,30 @@ export default function Library() {
         {filtered.map((g) => (
           <GameCard key={g.id} game={g} />
         ))}
-        {filtered.length === 0 && (
+        {games === null && (
+          <div
+            role="alert"
+            style={{
+              gridColumn: "1 / -1",
+              textAlign: "center",
+              padding: 80,
+              color: "var(--ink-faint)",
+            }}
+          >
+            <div
+              className="pixel"
+              style={{
+                fontSize: 14,
+                color: "var(--magenta)",
+                marginBottom: 12,
+              }}
+            >
+              NO PUDIMOS CARGAR LOS JUEGOS.
+            </div>
+            <div>Recarga la página en unos segundos.</div>
+          </div>
+        )}
+        {games !== null && filtered.length === 0 && (
           <div
             style={{
               gridColumn: "1 / -1",
@@ -64,7 +88,11 @@ export default function Library() {
           >
             <div
               className="pixel"
-              style={{ fontSize: 14, color: "var(--magenta)", marginBottom: 12 }}
+              style={{
+                fontSize: 14,
+                color: "var(--magenta)",
+                marginBottom: 12,
+              }}
             >
               NO HAY RESULTADOS
             </div>

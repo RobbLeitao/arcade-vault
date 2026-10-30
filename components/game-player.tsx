@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import AsteroidsCanvas, {
   type AsteroidsHandle,
 } from "@/components/asteroids-canvas";
+import { submitScore } from "@/app/jugar/[id]/actions";
 import type { Game } from "@/lib/games";
 import { useSession } from "@/lib/session";
 
@@ -24,6 +25,16 @@ export default function GamePlayer({ game }: { game: Game }) {
   const [over, setOver] = useState(false);
   const [typedName, setTypedName] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveFailed, setSaveFailed] = useState(false);
+  // La sesión se perdió justo al guardar: la marca queda solo en local.
+  const [authLost, setAuthLost] = useState(false);
+  // Identifica la partida en curso para ignorar respuestas de una anterior.
+  const runRef = useRef(0);
+
+  // Entra al ranking solo un juego jugable con sesión iniciada.
+  const ranked = game.playable && user !== null;
+  const showGuestNote = game.playable && (user === null || authLost);
 
   // Hasta que el usuario edita el campo, el nombre sigue a la sesión
   // (que llega tras la hidratación).
@@ -52,6 +63,10 @@ export default function GamePlayer({ game }: { game: Game }) {
     setPaused(false);
     setOver(false);
     setSaved(false);
+    setSaving(false);
+    setSaveFailed(false);
+    setAuthLost(false);
+    runRef.current += 1;
     // El motor vuelve a emitir vidas, nivel y power-up al reiniciar.
     engineRef.current?.restart();
   };
@@ -67,9 +82,31 @@ export default function GamePlayer({ game }: { game: Game }) {
     setOver(true);
   };
 
-  const save = () => {
+  const saveLocal = () => {
     saveScore({ game: game.id, score, name });
     setSaved(true);
+  };
+
+  const save = async () => {
+    if (!ranked) {
+      saveLocal();
+      return;
+    }
+    if (saving || saved) return;
+    const run = runRef.current;
+    setSaving(true);
+    setSaveFailed(false);
+    const result = await submitScore(game.id, score);
+    if (run !== runRef.current) return;
+    setSaving(false);
+    if (result.ok) {
+      setSaved(true);
+    } else if (result.error === "AUTH") {
+      setAuthLost(true);
+      saveLocal();
+    } else {
+      setSaveFailed(true);
+    }
   };
 
   return (
@@ -174,20 +211,44 @@ export default function GamePlayer({ game }: { game: Game }) {
             <div className="final-label">PUNTUACIÓN FINAL</div>
             <div className="final">{score.toLocaleString("es-ES")}</div>
             {!saved ? (
-              <div className="input-row">
-                <input
-                  value={name}
-                  onChange={(e) =>
-                    setTypedName(e.target.value.toUpperCase().slice(0, 10))
-                  }
-                  placeholder="TUS INICIALES"
-                />
-                <button className="btn yellow" onClick={save}>
-                  GUARDAR PUNTUACIÓN
+              <div className={"input-row" + (ranked ? " solo" : "")}>
+                {!ranked && (
+                  <input
+                    value={name}
+                    onChange={(e) =>
+                      setTypedName(e.target.value.toUpperCase().slice(0, 10))
+                    }
+                    placeholder="TUS INICIALES"
+                  />
+                )}
+                <button className="btn yellow" onClick={save} disabled={saving}>
+                  {saving ? "GUARDANDO…" : "GUARDAR PUNTUACIÓN"}
                 </button>
               </div>
             ) : (
               <div className="toast-saved">▸ PUNTUACIÓN GUARDADA_</div>
+            )}
+            {saveFailed && (
+              <div
+                role="alert"
+                className="mono"
+                style={{ color: "var(--magenta)", fontSize: 11, marginTop: 10 }}
+              >
+                NO PUDIMOS GUARDAR LA PUNTUACIÓN. INTÉNTALO DE NUEVO.
+              </div>
+            )}
+            {showGuestNote && (
+              <div
+                className="mono"
+                style={{
+                  color: "var(--ink-dim)",
+                  fontSize: 11,
+                  letterSpacing: "0.12em",
+                  marginTop: 10,
+                }}
+              >
+                INICIA SESIÓN PARA ENTRAR AL RANKING
+              </div>
             )}
             <div className="actions">
               <button className="btn" onClick={restart}>
