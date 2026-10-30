@@ -1,6 +1,6 @@
 # SPEC 06 — Tabla de juegos y leaderboard en Supabase
 
-> **Estado:** Aprobado
+> **Estado:** Implementado
 > **Depende de:** SPEC 01, SPEC 04, SPEC 05
 > **Fecha:** 2026-10-30
 > **Objetivo:** Crear en Supabase las tablas `games` y `scores` con un ranking por juego y conectar catálogo, detalle, reproductor y Salón de la Fama a esos datos reales, de modo que ROCAS guarde las puntuaciones de quien tiene sesión y las muestre en el leaderboard.
