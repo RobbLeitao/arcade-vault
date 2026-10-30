@@ -211,7 +211,7 @@ export default function GamePlayer({ game }: { game: Game }) {
             <div className="final-label">PUNTUACIÓN FINAL</div>
             <div className="final">{score.toLocaleString("es-ES")}</div>
             {!saved ? (
-              <div className="input-row">
+              <div className={"input-row" + (ranked ? " solo" : "")}>
                 {!ranked && (
                   <input
                     value={name}

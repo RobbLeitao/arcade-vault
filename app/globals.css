@@ -1350,3 +1350,6 @@ a { color: inherit; text-decoration: none; }
   max-width: max(420px, calc((100dvh - 320px) * 4 / 3 + 48px));
   margin-inline: auto;
 }
+
+/* Fin de partida con sesion: sin campo de iniciales, el boton va centrado */
+.modal .input-row.solo { justify-content: center; }
