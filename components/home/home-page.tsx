@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { GAMES } from "@/lib/games";
+import type { Game } from "@/lib/games";
 import {
   ACTIVITY,
   FAQS,
@@ -16,7 +16,8 @@ import FeatureIcon from "./feature-icon";
 import FloatingSilhouettes from "./floating-silhouettes";
 import MiniCard from "./mini-card";
 
-export default function HomePage() {
+// `games` es null cuando falló la lectura del catálogo.
+export default function HomePage({ games }: { games: Game[] | null }) {
   useReveal();
   const { user } = useSession();
 
@@ -86,9 +87,17 @@ export default function HomePage() {
           <div className="section-rule"></div>
         </div>
         <div className="mini-rail">
-          {GAMES.slice(0, 6).map((g) => (
-            <MiniCard key={g.id} game={g} />
-          ))}
+          {games === null ? (
+            <div
+              role="alert"
+              className="pixel"
+              style={{ fontSize: 12, color: "var(--magenta)", padding: 24 }}
+            >
+              NO PUDIMOS CARGAR LOS JUEGOS.
+            </div>
+          ) : (
+            games.slice(0, 6).map((g) => <MiniCard key={g.id} game={g} />)
+          )}
         </div>
         <div style={{ textAlign: "center", marginTop: 24 }}>
           <Link href="/biblioteca" className="btn lg">
@@ -135,7 +144,9 @@ export default function HomePage() {
                 >
                   <span className={"tk-p neon-" + r.color}>{r.player}</span>
                   <span className="tk-mid">▸ {r.game}</span>
-                  <span className="tk-s">+{r.score.toLocaleString("es-ES")}</span>
+                  <span className="tk-s">
+                    +{r.score.toLocaleString("es-ES")}
+                  </span>
                   <span className="tk-t">{r.when}</span>
                 </div>
               ))}
@@ -161,7 +172,9 @@ export default function HomePage() {
                     #{String(r.rank).padStart(2, "0")}
                   </span>
                   <span className="tp-p">{r.player}</span>
-                  <span className="tp-s">{r.score.toLocaleString("es-ES")}</span>
+                  <span className="tp-s">
+                    {r.score.toLocaleString("es-ES")}
+                  </span>
                 </div>
               ))}
             </div>

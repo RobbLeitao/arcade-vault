@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { GAMES, seededScores } from "@/lib/games";
+import { formatPlays, GAMES, seededScores } from "@/lib/games";
 
 export function generateStaticParams() {
   return GAMES.map((g) => ({ id: g.id }));
@@ -33,7 +33,7 @@ export default async function GameDetailPage({
           <div className="stat-strip">
             <div>
               <div className="l">Partidas</div>
-              <div className="v">{game.plays}</div>
+              <div className="v">{formatPlays(game.plays)}</div>
             </div>
             <div>
               <div className="l">Mejor global</div>
@@ -44,7 +44,7 @@ export default async function GameDetailPage({
                   textShadow: "0 0 6px rgba(255,0,110,0.5)",
                 }}
               >
-                {game.best.toLocaleString("es-ES")}
+                {game.best === null ? "—" : game.best.toLocaleString("es-ES")}
               </div>
             </div>
             <div>

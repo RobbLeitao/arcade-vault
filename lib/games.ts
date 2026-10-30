@@ -9,8 +9,9 @@ export interface Game {
   cat: GameCategory;
   cover: string;
   color: GameColor;
-  best: number;
-  plays: string;
+  playable: boolean;
+  best: number | null; // null = sin puntuaciones
+  plays: number;
 }
 
 export interface ScoreRow {
@@ -18,6 +19,24 @@ export interface ScoreRow {
   name: string;
   score: number;
   date: string;
+}
+
+// 842 -> "842", 15600 -> "15.6K"
+export function formatPlays(n: number): string {
+  if (n < 1000) return String(n);
+  return `${(n / 1000).toFixed(1).replace(/\.0$/, "")}K`;
+}
+
+// dd/mm/aaaa en zona fija: igual en servidor y cliente, sin romper la hidratación.
+const SCORE_DATE = new Intl.DateTimeFormat("es-ES", {
+  timeZone: "Europe/Madrid",
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+});
+
+export function formatScoreDate(iso: string): string {
+  return SCORE_DATE.format(new Date(iso));
 }
 
 export const GAMES: Game[] = [
@@ -28,9 +47,10 @@ export const GAMES: Game[] = [
     long: "Pilota una nave-paleta y rebota un núcleo de plasma para pulverizar muros de bloques cromáticos. Cada nivel reorganiza la grilla en patrones imposibles. ¿Hasta dónde llegará tu racha?",
     cat: "ARCADE",
     cover: "cover-bricks",
+    playable: false,
     color: "cyan",
     best: 28450,
-    plays: "12.4K",
+    plays: 12400,
   },
   {
     id: "caida",
@@ -39,9 +59,10 @@ export const GAMES: Game[] = [
     long: "Piezas geométricas descienden desde la oscuridad. Rótalas, encástralas y limpia líneas para sobrevivir. La velocidad aumenta sin piedad cada 10 líneas.",
     cat: "PUZZLE",
     cover: "cover-tetro",
+    playable: false,
     color: "magenta",
     best: 184220,
-    plays: "31.8K",
+    plays: 31800,
   },
   {
     id: "serpentina",
@@ -50,9 +71,10 @@ export const GAMES: Game[] = [
     long: "Una serpiente de luz recorre la grilla buscando núcleos magenta. Cada bocado la alarga y la hace más veloz. Un movimiento en falso y se devora a sí misma.",
     cat: "ARCADE",
     cover: "cover-snake",
+    playable: false,
     color: "green",
     best: 7820,
-    plays: "9.1K",
+    plays: 9100,
   },
   {
     id: "gloton",
@@ -61,9 +83,10 @@ export const GAMES: Game[] = [
     long: "Un círculo glotón patrulla un laberinto coleccionando puntos luminosos. Cuatro espectros lo persiguen, pero cada cierto tiempo aparece una píldora que invierte los papeles.",
     cat: "ARCADE",
     cover: "cover-glot",
+    playable: false,
     color: "yellow",
     best: 96400,
-    plays: "27.2K",
+    plays: 27200,
   },
   {
     id: "invasores",
@@ -72,9 +95,10 @@ export const GAMES: Game[] = [
     long: "Olas de pixeles hostiles descienden formación tras formación. Mueve tu cañón en horizontal y abre fuego con precisión, antes de que toquen la superficie.",
     cat: "SHOOTER",
     cover: "cover-invaders",
+    playable: false,
     color: "green",
     best: 54190,
-    plays: "18.0K",
+    plays: 18000,
   },
   {
     id: "rocas",
@@ -83,9 +107,10 @@ export const GAMES: Game[] = [
     long: "Tu nave triangular flota en vacío absoluto. Dispara y rota para dividir rocas en fragmentos cada vez más pequeños. Recoge el power-up 3x para disparar en abanico durante 5 segundos.",
     cat: "SHOOTER",
     cover: "cover-rocas",
+    playable: true,
     color: "yellow",
     best: 41200,
-    plays: "15.6K",
+    plays: 15600,
   },
   {
     id: "ranaria",
@@ -94,9 +119,10 @@ export const GAMES: Game[] = [
     long: "Salta entre carriles de coches a toda velocidad y troncos a la deriva en el río. Llega a los nenúfares antes de que se acabe el tiempo.",
     cat: "ARCADE",
     cover: "cover-rana",
+    playable: false,
     color: "green",
     best: 18900,
-    plays: "6.4K",
+    plays: 6400,
   },
   {
     id: "duelo-pixel",
@@ -105,9 +131,10 @@ export const GAMES: Game[] = [
     long: "El duelo más puro: dos paletas verticales se enfrentan por rebotar una pelota luminosa. Modo solitario contra la CPU o partida local a dos jugadores.",
     cat: "VERSUS",
     cover: "cover-duelo",
+    playable: false,
     color: "cyan",
     best: 24,
-    plays: "4.2K",
+    plays: 4200,
   },
 ];
 
