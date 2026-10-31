@@ -1,6 +1,6 @@
 # SPEC 09 — Cuarto juego real: SERPENTINA (Snake)
 
-> **Estado:** Aprobado
+> **Estado:** Implementado
 > **Depende de:** SPEC 05, SPEC 06, SPEC 07, SPEC 08
 > **Fecha:** 2026-10-31
 > **Objetivo:** Crear un motor TypeScript de Snake registrado como `serpentina`, jugable en `/jugar/serpentina` con el HUD, la pausa y el modal de la plataforma, con las frutas de `fruits.png` como comida y con ranking real en Supabase, sobre el contrato y el registro de motores de la SPEC 07.
