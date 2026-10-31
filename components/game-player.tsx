@@ -215,6 +215,35 @@ export default function GamePlayer({ game }: { game: Game }) {
                 >
                   PULSA REANUDAR PARA CONTINUAR
                 </div>
+                {entry?.levels && (
+                  <div className="level-picker">
+                    <div className="level-picker-label mono">
+                      SALTAR AL NIVEL
+                    </div>
+                    <div className="level-picker-list">
+                      {Array.from(
+                        { length: entry.levels },
+                        (_, i) => i + 1,
+                      ).map((n) => (
+                        <button
+                          key={n}
+                          type="button"
+                          className={
+                            "btn level-btn" +
+                            (n === engineLevel ? " current" : "")
+                          }
+                          aria-pressed={n === engineLevel}
+                          onClick={() => {
+                            engineRef.current?.goToLevel?.(n);
+                            setPaused(false);
+                          }}
+                        >
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
