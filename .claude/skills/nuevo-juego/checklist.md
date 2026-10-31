@@ -7,7 +7,7 @@ Sustituye `<id>` por el id del juego en la tabla `games` y `<T√≠tulo>` por su t√
 | Referencia                    | Fila de `games` | Estado             |
 | ----------------------------- | --------------- | ------------------ |
 | `02-asteroids`                | `rocas`         | Hecho (SPEC 05/06) |
-| `03-tetris`                   | `caida`         | Pendiente          |
+| `03-tetris`                   | `caida`         | Hecho (SPEC 07)    |
 | `04-arkanoid`                 | `bloque-buster` | Pendiente          |
 | Snake sin referencia          | `serpentina`    | Pendiente          |
 | Pac-Man sin referencia        | `gloton`        | Pendiente          |
