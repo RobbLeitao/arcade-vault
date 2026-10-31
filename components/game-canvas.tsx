@@ -6,7 +6,7 @@ import { ENGINES } from "@/lib/games/registry";
 
 export type GameHandle = Pick<
   GameEngine,
-  "pause" | "resume" | "restart" | "end"
+  "pause" | "resume" | "restart" | "end" | "goToLevel"
 >;
 
 interface GameCanvasProps extends GameCallbacks {
@@ -80,6 +80,7 @@ export default function GameCanvas({
     resume: () => engineRef.current?.resume(),
     restart: () => engineRef.current?.restart(),
     end: () => engineRef.current?.end(),
+    goToLevel: (level) => engineRef.current?.goToLevel?.(level),
   }));
 
   if (!entry) return null;

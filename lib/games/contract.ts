@@ -22,6 +22,7 @@ export interface GameEngine {
   restart: () => void; // reinicia y vuelve a emitir score, lives, level y stats
   end: () => void; // termina la partida en curso y llama a onGameOver
   destroy: () => void; // cancela el bucle y quita los listeners
+  goToLevel?: (level: number) => void; // salta al nivel indicado (1..levels); solo motores con niveles
 }
 
 export type CreateGame = (
