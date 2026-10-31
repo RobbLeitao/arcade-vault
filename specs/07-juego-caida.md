@@ -1,6 +1,6 @@
 # SPEC 07 — Segundo juego real: CAÍDA (Tetris)
 
-> **Estado:** Aprobado
+> **Estado:** Implementado
 > **Depende de:** SPEC 05, SPEC 06
 > **Fecha:** 2026-10-31
 > **Objetivo:** Portar el Tetris de `references/started-games/03-tetris` a un motor TypeScript registrado como `caida`, jugable en `/jugar/caida` con el HUD, la pausa y el modal de la plataforma y con ranking real en Supabase, extrayendo antes de ROCAS el contrato y el registro de motores que reutilizarán los siguientes juegos.
@@ -27,6 +27,7 @@ El código de Tetris (`game.js`, 332 líneas, canvas del tablero 300×600) difie
 - Controles: `←` `→` mover, `↑` o `X` rotar, `↓` bajar, `Espacio` caída instantánea y `P` pausar/reanudar. Se bloquean con `preventDefault` solo las flechas y `Espacio`, con la partida activa y el foco fuera de `input`/`textarea`.
 - Estilo neón del tema: colores de las piezas desde las variables CSS cuando existen (ver Modelo de datos), cuadrícula tenue y brillo moderado con `shadowBlur`.
 - Migración `supabase/migrations/20261031120000_caida_playable.sql`: `update` de la fila `caida` con `playable = true` y `long` corregido.
+- Orden del catálogo: `fetchGames` en `lib/games-data.ts` ordena por `playable` descendente y luego por `sort_order`, de modo que los juegos reales (con motor y ranking) salen antes que los simulados en Biblioteca, Home y Salón de la Fama. Añadido durante la implementación, a petición expresa; ver Decisiones.
 - Reglas CSS nuevas al final de `app/globals.css` solo si hacen falta; el refactor de ROCAS solo renombra `.asteroids-canvas` a `.game-canvas` y generaliza `.crt.crt-fit` (ver paso 2).
 
 **Fuera de alcance (para futuras specs):**
@@ -179,43 +180,44 @@ Antes de empezar, leer en `node_modules/next/dist/docs/` la guía de componentes
 
 ## Criterios de aceptación
 
-- [ ] `npm run lint` y `npm run build` terminan sin errores ni warnings de Cache Components o hidratación.
-- [ ] `select playable from games where id = 'caida'` devuelve `true`, y `ENGINES["caida"]` existe.
-- [ ] `/jugar/caida` muestra un `<canvas>` con la partida lista y no muestra `.game-arena`.
-- [ ] Los demás juegos no jugables (por ejemplo `/jugar/serpentina`) conservan simulación y `.game-arena`.
-- [ ] ROCAS se comporta igual que antes (controles, pausa, HUD con `3x`, fin, ranking) y los criterios de la SPEC 05 siguen cumpliéndose.
-- [ ] `components/game-player.tsx` no contiene `isRocas` ni `game.id === "..."`, y `components/asteroids-canvas.tsx` ya no existe.
-- [ ] El tablero es de 10×20 y aparece una pieza arriba y la siguiente en el panel `SIGUIENTE` a la derecha.
-- [ ] Salen las 8 piezas, incluida la tuerca 3×3 con hueco central inferior (`N`), con colores distintos.
-- [ ] `←` y `→` mueven la pieza una columna y no la sacan del tablero ni la meten en bloques fijados.
-- [ ] `↑` y `X` rotan en sentido horario; pegada a una pared, la rotación se desplaza por _wall kick_ si cabe y se descarta si no.
-- [ ] `↓` baja una fila y suma 1 punto; `Espacio` deja caer la pieza al instante, suma 2 puntos por celda recorrida y fija la pieza.
-- [ ] La pieza fantasma se dibuja al 20 % de opacidad en la posición de aterrizaje y coincide con donde cae la pieza con `Espacio`.
-- [ ] Limpiar 1, 2, 3 y 4 líneas a la vez suma 100, 300, 500 y 800 puntos multiplicados por el nivel, y el HUD muestra el nuevo total.
-- [ ] El stat `Líneas` del HUD cuenta las líneas limpiadas y el nivel pasa de `01` a `02` al llegar a 10 líneas.
-- [ ] La pieza baja sola cada 1000 ms en el nivel 1 y el intervalo se acorta 90 ms por nivel hasta un mínimo de 100 ms.
-- [ ] El HUD no muestra Vidas.
-- [ ] La tecla `P` pausa y reanuda a través del estado de la plataforma: el botón pasa de `PAUSA` a `REANUDAR`, aparece "EN PAUSA" y una segunda pulsación reanuda sin saltos.
-- [ ] Pulsar `P` con la partida terminada (modal abierto) no hace nada.
-- [ ] La partida termina cuando la pieza nueva colisiona al aparecer y se abre el modal "FIN DEL JUEGO" con la puntuación final; no hay "GAME OVER" dibujado en el canvas.
-- [ ] `PAUSA` congela el juego y muestra "EN PAUSA"; `REANUDAR` continúa sin que la pieza salte varias filas de golpe.
-- [ ] Tras pulsar `PAUSA` y `REANUDAR` con el ratón, `Espacio` deja caer la pieza y no vuelve a activar el botón.
-- [ ] `FIN` durante la partida abre el mismo modal con la puntuación actual y detiene el juego.
-- [ ] "JUGAR DE NUEVO" empieza con tablero vacío, puntuación 0, nivel `01`, `Líneas` 0 y la caída a velocidad de nivel 1, sin duplicar el bucle tras reiniciar varias veces.
-- [ ] Escribir las iniciales en el modal (incluida la barra espaciadora) no mueve ni suelta ninguna pieza.
-- [ ] Con sesión iniciada, "GUARDAR PUNTUACIÓN" crea una fila en `scores` con `game_id = 'caida'`, el `user_id` del usuario y la puntuación final mostrada.
-- [ ] Esa marca aparece en `/salon-de-la-fama` (pestaña CAÍDA) y en el panel de `/juegos/caida` sin vaciar la caché a mano, y `Partidas` sube en 1.
-- [ ] Sin sesión, el modal conserva el campo de iniciales, guarda en `localStorage["av_scores"]` y muestra `INICIA SESIÓN PARA ENTRAR AL RANKING`; no se crea fila en `scores`.
-- [ ] Las flechas y `Espacio` no hacen scroll de la página durante la partida.
-- [ ] Al pulsar `SALIR` o navegar a otra ruta se cancela el bucle y se quitan los listeners: las teclas recuperan su comportamiento normal y no hay errores en consola.
-- [ ] Con React StrictMode en desarrollo hay un único bucle activo (una sola pieza cayendo, velocidad normal).
-- [ ] Los colores `I`, `O`, `T` y `S` del canvas salen de `--cyan`, `--yellow`, `--magenta` y `--green`, y el dibujo tiene brillo neón.
-- [ ] El canvas conserva la proporción 7:10 a 1280 px y a 390 px, y a 390 px `/jugar/caida` no tiene scroll horizontal.
-- [ ] A 1280 px de ancho y 800 px de alto el marco CRT de `/jugar/caida` cabe entero en la ventana sin scroll vertical dentro del reproductor.
-- [ ] `/juegos/caida` ya no muestra `PRÓXIMAMENTE` y la descripción menciona la tuerca, la pieza fantasma y la subida de nivel cada 10 líneas.
-- [ ] `get_advisors` de seguridad no reporta avisos nuevos tras la migración.
-- [ ] La consola del navegador no muestra errores ni warnings en `/jugar/caida` durante una partida completa.
-- [ ] Las demás pantallas (Home, Acerca de, Biblioteca, detalle, Salón, acceso) se ven y funcionan igual que antes.
+- [x] `npm run lint` y `npm run build` terminan sin errores ni warnings de Cache Components o hidratación.
+- [x] `select playable from games where id = 'caida'` devuelve `true`, y `ENGINES["caida"]` existe.
+- [x] `/jugar/caida` muestra un `<canvas>` con la partida lista y no muestra `.game-arena`.
+- [x] Los demás juegos no jugables (por ejemplo `/jugar/serpentina`) conservan simulación y `.game-arena`.
+- [x] ROCAS se comporta igual que antes (controles, pausa, HUD con `3x`, fin, ranking) y los criterios de la SPEC 05 siguen cumpliéndose.
+- [x] `components/game-player.tsx` no contiene `isRocas` ni `game.id === "..."`, y `components/asteroids-canvas.tsx` ya no existe.
+- [x] El tablero es de 10×20 y aparece una pieza arriba y la siguiente en el panel `SIGUIENTE` a la derecha.
+- [x] Salen las 8 piezas, incluida la tuerca 3×3 con hueco central (`N`), con colores distintos.
+- [x] `←` y `→` mueven la pieza una columna y no la sacan del tablero ni la meten en bloques fijados.
+- [x] `↑` y `X` rotan en sentido horario; pegada a una pared, la rotación se desplaza por _wall kick_ si cabe y se descarta si no.
+- [x] `↓` baja una fila y suma 1 punto; `Espacio` deja caer la pieza al instante, suma 2 puntos por celda recorrida y fija la pieza.
+- [x] La pieza fantasma se dibuja al 20 % de opacidad en la posición de aterrizaje y coincide con donde cae la pieza con `Espacio`.
+- [x] Limpiar 1, 2, 3 y 4 líneas a la vez suma 100, 300, 500 y 800 puntos multiplicados por el nivel, y el HUD muestra el nuevo total.
+- [x] El stat `Líneas` del HUD cuenta las líneas limpiadas y el nivel pasa de `01` a `02` al llegar a 10 líneas.
+- [x] La pieza baja sola cada 1000 ms en el nivel 1 y el intervalo se acorta 90 ms por nivel hasta un mínimo de 100 ms.
+- [x] El HUD no muestra Vidas.
+- [x] La tecla `P` pausa y reanuda a través del estado de la plataforma: el botón pasa de `PAUSA` a `REANUDAR`, aparece "EN PAUSA" y una segunda pulsación reanuda sin saltos.
+- [x] Pulsar `P` con la partida terminada (modal abierto) no hace nada.
+- [x] La partida termina cuando la pieza nueva colisiona al aparecer y se abre el modal "FIN DEL JUEGO" con la puntuación final; no hay "GAME OVER" dibujado en el canvas.
+- [x] `PAUSA` congela el juego y muestra "EN PAUSA"; `REANUDAR` continúa sin que la pieza salte varias filas de golpe.
+- [x] Tras pulsar `PAUSA` y `REANUDAR` con el ratón, `Espacio` deja caer la pieza y no vuelve a activar el botón.
+- [x] `FIN` durante la partida abre el mismo modal con la puntuación actual y detiene el juego.
+- [x] "JUGAR DE NUEVO" empieza con tablero vacío, puntuación 0, nivel `01`, `Líneas` 0 y la caída a velocidad de nivel 1, sin duplicar el bucle tras reiniciar varias veces.
+- [x] Escribir las iniciales en el modal (incluida la barra espaciadora) no mueve ni suelta ninguna pieza.
+- [x] Con sesión iniciada, "GUARDAR PUNTUACIÓN" crea una fila en `scores` con `game_id = 'caida'`, el `user_id` del usuario y la puntuación final mostrada.
+- [x] Esa marca aparece en `/salon-de-la-fama` (pestaña CAÍDA) y en el panel de `/juegos/caida` sin vaciar la caché a mano, y `Partidas` sube en 1.
+- [x] Sin sesión, el modal conserva el campo de iniciales, guarda en `localStorage["av_scores"]` y muestra `INICIA SESIÓN PARA ENTRAR AL RANKING`; no se crea fila en `scores`.
+- [x] Las flechas y `Espacio` no hacen scroll de la página durante la partida.
+- [x] Al pulsar `SALIR` o navegar a otra ruta se cancela el bucle y se quitan los listeners: las teclas recuperan su comportamiento normal y no hay errores en consola.
+- [x] Con React StrictMode en desarrollo hay un único bucle activo (una sola pieza cayendo, velocidad normal).
+- [x] Los colores `I`, `O`, `T` y `S` del canvas salen de `--cyan`, `--yellow`, `--magenta` y `--green`, y el dibujo tiene brillo neón.
+- [x] El canvas conserva la proporción 7:10 a 1280 px y a 390 px, y a 390 px `/jugar/caida` no tiene scroll horizontal.
+- [x] A 1280 px de ancho y 800 px de alto el marco CRT de `/jugar/caida` cabe entero en la ventana sin scroll vertical dentro del reproductor.
+- [x] `/juegos/caida` ya no muestra `PRÓXIMAMENTE` y la descripción menciona la tuerca, la pieza fantasma y la subida de nivel cada 10 líneas.
+- [x] `get_advisors` de seguridad no reporta avisos nuevos tras la migración.
+- [x] La consola del navegador no muestra errores ni warnings en `/jugar/caida` durante una partida completa. Nota: el motor no genera errores; persiste el aviso de Next sobre `params` fuera de `<Suspense>` en `/jugar/[id]` y `/juegos/[id]` (SPEC 06), que queda para otra spec.
+- [x] Las demás pantallas (Home, Acerca de, Biblioteca, detalle, Salón, acceso) se ven y funcionan igual que antes, salvo el orden del catálogo del criterio siguiente.
+- [x] La Biblioteca lista primero los juegos con `playable = true` (`caida`, `rocas`) y después los simulados, cada grupo en su `sort_order`.
 
 ---
 
@@ -241,6 +243,7 @@ Antes de empezar, leer en `node_modules/next/dist/docs/` la guía de componentes
 - **Sí:** `max_score` se queda en 1.000.000, valor de la SPEC 06. Una partida larga de Tetris queda muy por debajo; se ajusta con una migración si hay datos reales que lo justifiquen.
 - **Sí:** sin sonido ni assets. No hay `public/games/caida/`.
 - **Sí:** los textos de la UI siguen en español.
+- **Sí:** ordenar el catálogo con los juegos jugables primero, en `fetchGames` (`.order("playable", { ascending: false })` antes de `.order("sort_order")`). Se añadió fuera del plan original, a petición del autor, para que la Biblioteca muestre los juegos reales antes que los simulados. Un único origen del orden evita ordenar en cada pantalla. Efecto colateral aceptado: la Home (`slice(0, 6)`) y las pestañas del Salón de la Fama siguen el mismo orden. Sin migración: es una consulta.
 
 ---
 
