@@ -11,7 +11,9 @@ Arcade Vault: a platform for playing games online and competing for the highest 
 This is Next.js 16.4.3 with React 19.3 — APIs differ from older training data. Per `AGENTS.md`, read the relevant guide in `node_modules/next/dist/docs/` (`01-app`, `02-pages`, `03-architecture`, `04-community`) before writing Next.js code, and heed deprecation notices.
 
 ## Skills
+
 Usa siempre /frontend-design para diseñar la interfaz de usuario.
+Para añadir un juego a la plataforma (portado desde `references/started-games/` o nuevo) con su leaderboard, usa `/nuevo-juego`: genera la spec en `specs/` y luego se implementa con `/spec-impl`.
 
 ## Architecture notes
 

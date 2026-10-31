@@ -14,22 +14,7 @@ import {
   type Keys,
   type Palette,
 } from "./entities";
-
-export interface AsteroidsCallbacks {
-  onScore: (score: number) => void;
-  onLives: (lives: number) => void;
-  onLevel: (level: number) => void;
-  onPowerUp: (secondsLeft: number) => void;
-  onGameOver: (finalScore: number) => void;
-}
-
-export interface AsteroidsEngine {
-  pause: () => void;
-  resume: () => void;
-  restart: () => void;
-  end: () => void;
-  destroy: () => void;
-}
+import type { GameCallbacks, GameEngine } from "../contract";
 
 type State = "playing" | "dead" | "gameover";
 
@@ -69,8 +54,8 @@ function isTextField(target: EventTarget | null) {
 
 export function createAsteroids(
   canvas: HTMLCanvasElement,
-  callbacks: AsteroidsCallbacks,
-): AsteroidsEngine {
+  callbacks: GameCallbacks,
+): GameEngine {
   const ctx = canvas.getContext("2d");
   if (!ctx) {
     const noop = () => {};
@@ -115,8 +100,23 @@ export function createAsteroids(
     if (score !== sentScore) callbacks.onScore((sentScore = score));
     if (lives !== sentLives) callbacks.onLives((sentLives = lives));
     if (level !== sentLevel) callbacks.onLevel((sentLevel = level));
+    // Paso de 0.1 s; 0 = sin power-up.
     const left = ship.tripleShot > 0 ? Math.ceil(ship.tripleShot * 10) / 10 : 0;
-    if (left !== sentPowerUp) callbacks.onPowerUp((sentPowerUp = left));
+    if (left !== sentPowerUp) {
+      sentPowerUp = left;
+      callbacks.onStats(
+        left > 0
+          ? [
+              {
+                key: "triple",
+                label: "Triple",
+                value: `3x ${left.toFixed(1)}s`,
+                color: "magenta",
+              },
+            ]
+          : [],
+      );
+    }
   }
 
   // ── Entrada ─────────────────────────────────────────────────────────────────
