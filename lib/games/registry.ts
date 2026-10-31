@@ -12,4 +12,9 @@ export const ENGINES: Record<string, EngineEntry> = {
     height: 600,
     load: () => import("./asteroids/engine").then((m) => m.createAsteroids),
   },
+  caida: {
+    width: 420,
+    height: 600,
+    load: () => import("./caida/engine").then((m) => m.createCaida),
+  },
 };
