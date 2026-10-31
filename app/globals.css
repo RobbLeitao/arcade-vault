@@ -1338,16 +1338,16 @@ a { color: inherit; text-decoration: none; }
   .av-nav .user-menu .auth-btn { padding: 12px; gap: 6px; letter-spacing: 0.08em; }
 }
 
-/* juego ROCAS: canvas 800x600 escalado por CSS dentro de .crt-screen */
-.asteroids-canvas {
+/* juegos con motor: canvas escalado por CSS dentro de .crt-screen */
+.game-canvas {
   position: absolute; inset: 0;
   display: block;
   width: 100%; height: 100%;
 }
 
-/* ROCAS: el marco no supera el alto de la ventana para ver las 800x600 completas */
+/* Juegos con motor: el marco no supera el alto de la ventana (proporcion en --game-aspect) */
 .crt.crt-fit {
-  max-width: max(420px, calc((100dvh - 320px) * 4 / 3 + 48px));
+  max-width: max(320px, calc((100dvh - 320px) * var(--game-aspect, 1.3333) + 48px));
   margin-inline: auto;
 }
 

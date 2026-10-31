@@ -47,6 +47,8 @@ async function fetchGames(): Promise<Game[]> {
     supabase
       .from("games")
       .select("id, title, short, long, category, color, cover, playable")
+      // Primero los juegos reales (playable), luego los simulados.
+      .order("playable", { ascending: false })
       .order("sort_order"),
     supabase.from("game_stats").select("game_id, plays, best"),
   ]);

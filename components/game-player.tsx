@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import AsteroidsCanvas, {
-  type AsteroidsHandle,
-} from "@/components/asteroids-canvas";
+import GameCanvas, { type GameHandle } from "@/components/game-canvas";
 import { submitScore } from "@/app/jugar/[id]/actions";
 import type { Game } from "@/lib/games";
+import type { HudStat } from "@/lib/games/contract";
+import { ENGINES } from "@/lib/games/registry";
 import { useSession } from "@/lib/session";
 
 const LIVES = 3;
@@ -14,13 +14,13 @@ const POINTS_PER_LEVEL = 2500;
 
 export default function GamePlayer({ game }: { game: Game }) {
   const { user, saveScore } = useSession();
-  // ROCAS corre con su motor real; el resto de juegos sigue simulado.
-  const isRocas = game.id === "rocas";
-  const engineRef = useRef<AsteroidsHandle>(null);
+  // Los juegos con motor en el registro corren reales; el resto sigue simulado.
+  const entry = ENGINES[game.id];
+  const engineRef = useRef<GameHandle>(null);
   const [score, setScore] = useState(0);
-  const [lives, setLives] = useState(LIVES);
+  const [lives, setLives] = useState<number | null>(LIVES);
   const [engineLevel, setEngineLevel] = useState(1);
-  const [powerUpLeft, setPowerUpLeft] = useState(0);
+  const [stats, setStats] = useState<HudStat[]>([]);
   const [paused, setPaused] = useState(false);
   const [over, setOver] = useState(false);
   const [typedName, setTypedName] = useState<string | null>(null);
@@ -39,24 +39,22 @@ export default function GamePlayer({ game }: { game: Game }) {
   // Hasta que el usuario edita el campo, el nombre sigue a la sesión
   // (que llega tras la hidratación).
   const name = typedName ?? user?.name ?? "INVITADO";
-  const level = isRocas
-    ? engineLevel
-    : 1 + Math.floor(score / POINTS_PER_LEVEL);
+  const level = entry ? engineLevel : 1 + Math.floor(score / POINTS_PER_LEVEL);
 
   useEffect(() => {
-    if (!isRocas) return;
+    if (!entry) return;
     if (paused) engineRef.current?.pause();
     else engineRef.current?.resume();
-  }, [isRocas, paused]);
+  }, [entry, paused]);
 
   useEffect(() => {
-    if (isRocas || over || paused) return;
+    if (entry || over || paused) return;
     const t = setInterval(
       () => setScore((s) => s + Math.floor(10 + Math.random() * 90)),
       220,
     );
     return () => clearInterval(t);
-  }, [isRocas, over, paused]);
+  }, [entry, over, paused]);
 
   const restart = () => {
     setScore(0);
@@ -67,12 +65,12 @@ export default function GamePlayer({ game }: { game: Game }) {
     setSaveFailed(false);
     setAuthLost(false);
     runRef.current += 1;
-    // El motor vuelve a emitir vidas, nivel y power-up al reiniciar.
+    // El motor vuelve a emitir vidas, nivel y stats al reiniciar.
     engineRef.current?.restart();
   };
 
   const finish = () => {
-    if (isRocas) engineRef.current?.end();
+    if (entry) engineRef.current?.end();
     else setOver(true);
   };
 
@@ -123,22 +121,27 @@ export default function GamePlayer({ game }: { game: Game }) {
             <div className="l">Puntuación</div>
             <div className="v">{score.toLocaleString("es-ES")}</div>
           </div>
-          <div className="hud-stat lives">
-            <div className="l">Vidas</div>
-            <div className="v">{"♥ ".repeat(lives).trim() || "—"}</div>
-          </div>
+          {lives !== null && (
+            <div className="hud-stat lives">
+              <div className="l">Vidas</div>
+              <div className="v">{"♥ ".repeat(lives).trim() || "—"}</div>
+            </div>
+          )}
           <div className="hud-stat level">
             <div className="l">Nivel</div>
             <div className="v">{String(level).padStart(2, "0")}</div>
           </div>
-          {isRocas && powerUpLeft > 0 && (
-            <div className="hud-stat">
-              <div className="l">Triple</div>
-              <div className="v" style={{ color: "var(--magenta)" }}>
-                3x {powerUpLeft.toFixed(1)}s
+          {stats.map((stat) => (
+            <div key={stat.key} className="hud-stat">
+              <div className="l">{stat.label}</div>
+              <div
+                className="v"
+                style={{ color: `var(--${stat.color ?? "cyan"})` }}
+              >
+                {stat.value}
               </div>
             </div>
-          )}
+          ))}
         </div>
         <div className="hud-actions">
           <button className="btn yellow" onClick={() => setPaused((p) => !p)}>
@@ -153,16 +156,35 @@ export default function GamePlayer({ game }: { game: Game }) {
         </div>
       </div>
 
-      <div className={isRocas ? "crt crt-fit" : "crt"}>
-        <div className="crt-screen">
-          {isRocas ? (
-            <AsteroidsCanvas
+      <div
+        className={entry ? "crt crt-fit" : "crt"}
+        style={
+          entry
+            ? ({
+                "--game-aspect": entry.width / entry.height,
+              } as React.CSSProperties)
+            : undefined
+        }
+      >
+        <div
+          className="crt-screen"
+          style={
+            entry
+              ? { aspectRatio: `${entry.width} / ${entry.height}` }
+              : undefined
+          }
+        >
+          {entry ? (
+            <GameCanvas
               ref={engineRef}
+              gameId={game.id}
+              label={`Juego ${game.title}`}
               onScore={setScore}
               onLives={setLives}
               onLevel={setEngineLevel}
-              onPowerUp={setPowerUpLeft}
+              onStats={setStats}
               onGameOver={handleGameOver}
+              onPauseKey={() => setPaused((p) => !p)}
             />
           ) : (
             <div className="game-arena">
