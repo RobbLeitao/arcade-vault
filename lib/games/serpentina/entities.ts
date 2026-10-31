@@ -15,6 +15,7 @@ export const MAX_QUEUED_TURNS = 2;
 
 const FRUIT_MARGIN = 2; // px por lado dentro de la celda
 const SNAKE_INSET = 2;
+const TAPER_SEGMENTS = 3; // piezas de la cola que se afinan
 
 export type Direction = "up" | "down" | "left" | "right";
 
@@ -122,22 +123,29 @@ export function drawSnake(
   snake: Cell[],
   dir: Direction,
 ) {
-  const size = CELL - SNAKE_INSET * 2;
   ctx.save();
   ctx.shadowColor = palette.snake;
-  ctx.shadowBlur = 10;
+  ctx.shadowBlur = 14;
   ctx.fillStyle = palette.snake;
   for (let i = snake.length - 1; i >= 1; i--) {
     const { col, row } = snake[i];
+    // Las tres últimas piezas se afinan hacia la cola.
+    const fromTail = snake.length - 1 - i;
+    const inset = SNAKE_INSET + Math.max(0, TAPER_SEGMENTS - fromTail);
+    const size = CELL - inset * 2;
     ctx.beginPath();
-    ctx.roundRect(
-      col * CELL + SNAKE_INSET,
-      row * CELL + SNAKE_INSET,
-      size,
-      size,
-      8,
-    );
+    ctx.roundRect(col * CELL + inset, row * CELL + inset, size, size, 8);
     ctx.fill();
+
+    // Puente hacia la pieza anterior para que el cuerpo se lea continuo; no se
+    // une a través del borde cuando la serpiente se envuelve.
+    const prev = snake[i - 1];
+    if (Math.abs(prev.col - col) + Math.abs(prev.row - row) === 1) {
+      const x = Math.min(col, prev.col) * CELL;
+      const y = Math.min(row, prev.row) * CELL;
+      if (prev.row === row) ctx.fillRect(x + CELL / 2, y + inset, CELL, size);
+      else ctx.fillRect(x + inset, y + CELL / 2, size, CELL);
+    }
   }
 
   const head = snake[0];
@@ -194,6 +202,12 @@ export function drawFruit(
   const s = FRUIT_SPRITES[fruit.sprite];
   const dh = CELL - FRUIT_MARGIN * 2;
   const dw = (s.w * dh) / s.h;
+  // Halo suave para que la fruta destaque sobre el fondo oscuro
+  const halo = ctx.createRadialGradient(cx, cy, 2, cx, cy, CELL / 2 + 4);
+  halo.addColorStop(0, "rgba(255, 255, 255, 0.16)");
+  halo.addColorStop(1, "rgba(255, 255, 255, 0)");
+  ctx.fillStyle = halo;
+  ctx.fillRect(cx - CELL, cy - CELL, CELL * 2, CELL * 2);
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(image, s.x, s.y, s.w, s.h, cx - dw / 2, cy - dh / 2, dw, dh);
   ctx.restore();

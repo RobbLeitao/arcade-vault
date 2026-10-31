@@ -25,4 +25,13 @@ export const ENGINES: Record<string, EngineEntry> = {
     load: () =>
       import("./bloque-buster/engine").then((m) => m.createBloqueBuster),
   },
+  serpentina: {
+    width: 800,
+    height: 600,
+    load: async () => {
+      const m = await import("./serpentina/engine");
+      await m.loadFruitSprites();
+      return m.createSerpentina;
+    },
+  },
 };
