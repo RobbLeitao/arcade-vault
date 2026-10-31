@@ -1,6 +1,6 @@
 # SPEC 08 — Tercer juego real: BLOQUE BUSTER (Arkanoid)
 
-> **Estado:** Aprobado
+> **Estado:** Implementado
 > **Depende de:** SPEC 05, SPEC 06, SPEC 07
 > **Fecha:** 2026-10-31
 > **Objetivo:** Portar el Arkanoid de `references/started-games/04-arkanoid` a un motor TypeScript registrado como `bloque-buster`, jugable en `/jugar/bloque-buster` con el HUD, la pausa (incluido el selector de nivel) y el modal de la plataforma y con ranking real en Supabase, sobre el contrato y el registro de motores de la SPEC 07.

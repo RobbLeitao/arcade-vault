@@ -55,18 +55,20 @@ export function drawBlock(
   palette: Palette,
 ) {
   const color = palette.blocks[block.color];
-  const x = block.x + 1;
-  const y = block.y + 1;
-  const w = block.w - 2;
-  const h = block.h - 2;
+  const x = block.x + 2;
+  const y = block.y + 2;
+  const w = block.w - 4;
+  const h = block.h - 4;
   ctx.save();
   ctx.shadowColor = color;
   ctx.shadowBlur = 6;
   ctx.fillStyle = color;
   ctx.fillRect(x, y, w, h);
   ctx.shadowBlur = 0;
-  ctx.fillStyle = "rgba(255,255,255,0.18)";
-  ctx.fillRect(x, y, w, 4);
+  ctx.fillStyle = "rgba(255,255,255,0.22)";
+  ctx.fillRect(x, y, w, 3);
+  ctx.fillStyle = "rgba(0,0,0,0.28)";
+  ctx.fillRect(x, y + h - 4, w, 4);
   ctx.restore();
 }
 
