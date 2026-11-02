@@ -22,6 +22,12 @@ Para añadir un juego a la plataforma (portado desde `references/started-games/`
 - `.claude/skills/spec` y `spec-impl`: de `Klerith/fernando-skills` (registrados en `skills-lock.json`; copia en `.agents/skills/`). Reinstalar con `npx skills@latest add Klerith/fernando-skills`.
 - `.claude/skills/nuevo-juego`: skill propio. `contract.md` (contrato del motor y registro) y `checklist.md` (criterios, plantillas SQL) son la referencia para cualquier juego nuevo.
 
+## Agents
+
+- `.claude/agents/game-planner.md` (Opus): planifica y decide qué juego encaja en la plataforma antes de `/nuevo-juego`. Lee el catálogo (`references/implemented-games.md`, seed de `games`, `references/started-games/`, registro de motores), puntúa 3 candidatos con una rúbrica y recomienda uno con su ficha. No escribe specs ni código.
+- Tiene memoria persistente de proyecto (`memory: project`) en `.claude/agent-memory/game-planner/`: `suggestions.md` registra cada candidato sugerido con su estado (`sugerido`/`recomendado`/`elegido`/`descartado`/`implementado`) y `MEMORY.md` las preferencias del usuario. Se versiona en git; no la borres.
+- Flujo para un juego nuevo: `game-planner` → `/nuevo-juego` → `/spec-impl`.
+
 ## Hooks
 
 `.claude/settings.json` runs `.claude/hooks/format-file.mjs` after every Write/Edit: Prettier `--write` and, for JS/TS, `eslint --fix`. ESLint errors block the edit (exit 2) — fix them rather than bypassing. `references/`, `.next` and `node_modules` are skipped.
