@@ -36,10 +36,21 @@ export interface Explosion extends Rect {
   elapsed: number; // ms
 }
 
+// Patrón de relleno del ladrillo (RETRO lo usa para distinguir tipos con paleta limitada).
+export type BlockPattern = "solid" | "hollow" | "striped";
+
+// Paleta y efectos de un skin (ver ./skins.ts).
 export interface Palette {
-  blocks: Record<BlockColor, string>; // cian, amarillo, magenta y verde del tema; rojo, rosa y gris fijos
-  paddle: string; // --cyan
-  ball: string; // --ink
+  blocks: Record<BlockColor, string>;
+  patterns: Record<BlockColor, BlockPattern> | null; // null = todos macizos
+  paddle: string;
+  paddleCaps: string | null; // extremos de la paleta en otro color (CLÁSICO)
+  ball: string;
+  background: string | null; // null = transparente (fondo #000 de .crt-screen)
+  glow: number; // multiplicador de shadowBlur; 0 = sin glow
+  bevel: boolean; // filo claro arriba y sombra abajo en ladrillos y paleta
+  scanlines: number; // opacidad de las scanlines; 0 = sin ellas
+  vignette: number; // opacidad de la viñeta en las esquinas; 0 = sin ella
 }
 
 export function collideAABB(a: Rect, b: Rect): boolean {
@@ -48,27 +59,39 @@ export function collideAABB(a: Rect, b: Rect): boolean {
   );
 }
 
-// Bloque neón: relleno con brillo moderado y un filo claro arriba.
+// Ladrillo: relleno (con glow según el skin), patrón opcional y biselado.
 export function drawBlock(
   ctx: CanvasRenderingContext2D,
   block: Block,
   palette: Palette,
 ) {
   const color = palette.blocks[block.color];
+  const pattern = palette.patterns?.[block.color] ?? "solid";
   const x = block.x + 2;
   const y = block.y + 2;
   const w = block.w - 4;
   const h = block.h - 4;
   ctx.save();
   ctx.shadowColor = color;
-  ctx.shadowBlur = 6;
+  ctx.shadowBlur = 6 * palette.glow;
   ctx.fillStyle = color;
   ctx.fillRect(x, y, w, h);
   ctx.shadowBlur = 0;
-  ctx.fillStyle = "rgba(255,255,255,0.22)";
-  ctx.fillRect(x, y, w, 3);
-  ctx.fillStyle = "rgba(0,0,0,0.28)";
-  ctx.fillRect(x, y + h - 4, w, 4);
+  if (pattern !== "solid") {
+    ctx.fillStyle = palette.background ?? "#000";
+    if (pattern === "hollow") {
+      ctx.fillRect(x + 4, y + 4, w - 8, h - 8);
+    } else {
+      for (let sx = x + 5; sx < x + w - 3; sx += 8)
+        ctx.fillRect(sx, y + 3, 3, h - 6);
+    }
+  }
+  if (palette.bevel) {
+    ctx.fillStyle = "rgba(255,255,255,0.22)";
+    ctx.fillRect(x, y, w, 3);
+    ctx.fillStyle = "rgba(0,0,0,0.28)";
+    ctx.fillRect(x, y + h - 4, w, 4);
+  }
   ctx.restore();
 }
 
@@ -79,12 +102,19 @@ export function drawPaddle(
 ) {
   ctx.save();
   ctx.shadowColor = palette.paddle;
-  ctx.shadowBlur = 12;
+  ctx.shadowBlur = 12 * palette.glow;
   ctx.fillStyle = palette.paddle;
   ctx.fillRect(paddle.x, paddle.y, paddle.w, paddle.h);
   ctx.shadowBlur = 0;
-  ctx.fillStyle = "rgba(255,255,255,0.35)";
-  ctx.fillRect(paddle.x, paddle.y, paddle.w, 3);
+  if (palette.paddleCaps) {
+    ctx.fillStyle = palette.paddleCaps;
+    ctx.fillRect(paddle.x, paddle.y, 12, paddle.h);
+    ctx.fillRect(paddle.x + paddle.w - 12, paddle.y, 12, paddle.h);
+  }
+  if (palette.bevel) {
+    ctx.fillStyle = "rgba(255,255,255,0.35)";
+    ctx.fillRect(paddle.x, paddle.y, paddle.w, 3);
+  }
   ctx.restore();
 }
 
@@ -95,7 +125,7 @@ export function drawBall(
 ) {
   ctx.save();
   ctx.shadowColor = palette.ball;
-  ctx.shadowBlur = 10;
+  ctx.shadowBlur = 10 * palette.glow;
   ctx.fillStyle = palette.ball;
   ctx.fillRect(ball.x, ball.y, ball.w, ball.h);
   ctx.restore();
@@ -117,7 +147,7 @@ export function drawExplosion(
   ctx.save();
   ctx.globalAlpha = 1 - t * 0.8;
   ctx.shadowColor = color;
-  ctx.shadowBlur = 14;
+  ctx.shadowBlur = 14 * palette.glow;
   ctx.fillStyle = color;
   ctx.fillRect(exp.x - grow, exp.y - grow, exp.w + grow * 2, exp.h + grow * 2);
   ctx.restore();

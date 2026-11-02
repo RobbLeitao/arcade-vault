@@ -16,6 +16,7 @@ export const MAX_QUEUED_TURNS = 2;
 const FRUIT_MARGIN = 2; // px por lado dentro de la celda
 const SNAKE_INSET = 2;
 const TAPER_SEGMENTS = 3; // piezas de la cola que se afinan
+const OUTLINE_PX = 1.5; // grosor del contorno de la fruta, en px del canvas
 
 export type Direction = "up" | "down" | "left" | "right";
 
@@ -87,11 +88,23 @@ export const FRUIT_SPRITES: Record<FruitName, SpriteRect> = {
 
 export const FRUIT_NAMES = Object.keys(FRUIT_SPRITES) as FruitName[];
 
+export type Rgb = readonly [number, number, number];
+
+// Paleta de un skin (ver ./skins.ts). Los efectos son campos, no ramas por skin.
 export interface Palette {
-  snake: string; // --green
-  head: string; // --green, más claro
-  grid: string; // --ink con baja opacidad
-  fallback: string; // --magenta; fruta si la imagen no cargó
+  snake: string; // cuerpo
+  head: string; // cabeza, distinta del cuerpo
+  eyeWhite: string;
+  pupil: string;
+  grid: string; // rejilla decorativa
+  fallback: string; // fruta si la imagen no cargó
+  background: string | null; // null = clearRect (se ve el negro de .crt-screen)
+  glow: number; // multiplicador del shadowBlur; 0 = sin glow
+  fruitHalo: { rgb: string; alpha: number } | null; // halo radial tras la fruta
+  fruitTint: { dark: Rgb; light: Rgb } | null; // rampa de tintado del atlas
+  fruitOutline: string | null; // contorno plano alrededor de la silueta
+  scanlines: number; // opacidad de las scanlines; 0 = ninguna
+  vignette: number; // opacidad de la viñeta en las esquinas; 0 = ninguna
 }
 
 export function stepMs(level: number): number {
@@ -115,8 +128,8 @@ export function drawGrid(ctx: CanvasRenderingContext2D, palette: Palette) {
   ctx.restore();
 }
 
-// Cuerpo con rectángulos redondeados y brillo neón; la cabeza (índice 0) es más
-// clara y lleva dos ojos mirando hacia `dir`.
+// Cuerpo con rectángulos redondeados y glow según el skin; la cabeza (índice 0)
+// es más clara y lleva dos ojos mirando hacia `dir`.
 export function drawSnake(
   ctx: CanvasRenderingContext2D,
   palette: Palette,
@@ -125,7 +138,7 @@ export function drawSnake(
 ) {
   ctx.save();
   ctx.shadowColor = palette.snake;
-  ctx.shadowBlur = 14;
+  ctx.shadowBlur = 14 * palette.glow;
   ctx.fillStyle = palette.snake;
   for (let i = snake.length - 1; i >= 1; i--) {
     const { col, row } = snake[i];
@@ -166,11 +179,11 @@ export function drawSnake(
   for (const side of [-1, 1]) {
     const ex = cx + fx * 7 + sx * side * 8;
     const ey = cy + fy * 7 + sy * side * 8;
-    ctx.fillStyle = "#fff";
+    ctx.fillStyle = palette.eyeWhite;
     ctx.beginPath();
     ctx.arc(ex, ey, 4.5, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = "#06130a";
+    ctx.fillStyle = palette.pupil;
     ctx.beginPath();
     ctx.arc(ex + fx * 1.5, ey + fy * 1.5, 2.2, 0, Math.PI * 2);
     ctx.fill();
@@ -178,20 +191,22 @@ export function drawSnake(
   ctx.restore();
 }
 
-// Fruta desde fruits.png, escalada a 36 px de alto y centrada en su celda. Si la
-// imagen no cargó (`image` null) dibuja un círculo de `palette.fallback`.
+// Fruta desde fruits.png (o su copia tintada del skin), escalada a 36 px de alto
+// y centrada en su celda; `outline` es la silueta del atlas para el contorno. Si
+// la imagen no cargó (`image` null) dibuja un círculo de `palette.fallback`.
 export function drawFruit(
   ctx: CanvasRenderingContext2D,
   palette: Palette,
   fruit: Fruit,
-  image: HTMLImageElement | null,
+  image: CanvasImageSource | null,
+  outline: CanvasImageSource | null,
 ) {
   const cx = fruit.col * CELL + CELL / 2;
   const cy = fruit.row * CELL + CELL / 2;
   ctx.save();
   if (!image) {
     ctx.shadowColor = palette.fallback;
-    ctx.shadowBlur = 10;
+    ctx.shadowBlur = 10 * palette.glow;
     ctx.fillStyle = palette.fallback;
     ctx.beginPath();
     ctx.arc(cx, cy, CELL / 2 - FRUIT_MARGIN - 4, 0, Math.PI * 2);
@@ -203,12 +218,75 @@ export function drawFruit(
   const dh = CELL - FRUIT_MARGIN * 2;
   const dw = (s.w * dh) / s.h;
   // Halo suave para que la fruta destaque sobre el fondo oscuro
-  const halo = ctx.createRadialGradient(cx, cy, 2, cx, cy, CELL / 2 + 4);
-  halo.addColorStop(0, "rgba(255, 255, 255, 0.16)");
-  halo.addColorStop(1, "rgba(255, 255, 255, 0)");
-  ctx.fillStyle = halo;
-  ctx.fillRect(cx - CELL, cy - CELL, CELL * 2, CELL * 2);
+  if (palette.fruitHalo) {
+    const { rgb, alpha } = palette.fruitHalo;
+    const halo = ctx.createRadialGradient(cx, cy, 2, cx, cy, CELL / 2 + 4);
+    halo.addColorStop(0, `rgba(${rgb}, ${alpha})`);
+    halo.addColorStop(1, `rgba(${rgb}, 0)`);
+    ctx.fillStyle = halo;
+    ctx.fillRect(cx - CELL, cy - CELL, CELL * 2, CELL * 2);
+  }
   ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(image, s.x, s.y, s.w, s.h, cx - dw / 2, cy - dh / 2, dw, dh);
+  const dx = cx - dw / 2;
+  const dy = cy - dh / 2;
+  if (outline) {
+    for (const [ox, oy] of OUTLINE_OFFSETS)
+      ctx.drawImage(outline, s.x, s.y, s.w, s.h, dx + ox, dy + oy, dw, dh);
+  }
+  ctx.drawImage(image, s.x, s.y, s.w, s.h, dx, dy, dw, dh);
   ctx.restore();
+}
+
+const OUTLINE_OFFSETS = [-1, 0, 1].flatMap((x) =>
+  [-1, 0, 1]
+    .filter((y) => x !== 0 || y !== 0)
+    .map((y) => [x * OUTLINE_PX, y * OUTLINE_PX] as const),
+);
+
+// Silueta del atlas rellena de un color plano (para el contorno de la fruta).
+export function silhouetteAtlas(
+  image: HTMLImageElement,
+  color: string,
+): HTMLCanvasElement | null {
+  const canvas = document.createElement("canvas");
+  canvas.width = image.naturalWidth;
+  canvas.height = image.naturalHeight;
+  const c = canvas.getContext("2d");
+  if (!c) return null;
+  c.drawImage(image, 0, 0);
+  c.globalCompositeOperation = "source-in";
+  c.fillStyle = color;
+  c.fillRect(0, 0, canvas.width, canvas.height);
+  return canvas;
+}
+
+// Copia del atlas tintada en una rampa de dos colores según el brillo de cada
+// píxel: conserva silueta, alfa y sombreado. Devuelve null si no se puede leer.
+export function tintAtlas(
+  image: HTMLImageElement,
+  tint: { dark: Rgb; light: Rgb },
+): HTMLCanvasElement | null {
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    const c = canvas.getContext("2d");
+    if (!c) return null;
+    c.drawImage(image, 0, 0);
+    const data = c.getImageData(0, 0, canvas.width, canvas.height);
+    const px = data.data;
+    const [dr, dg, db] = tint.dark;
+    const [lr, lg, lb] = tint.light;
+    for (let i = 0; i < px.length; i += 4) {
+      if (px[i + 3] === 0) continue;
+      const t = (0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2]) / 255;
+      px[i] = dr + (lr - dr) * t;
+      px[i + 1] = dg + (lg - dg) * t;
+      px[i + 2] = db + (lb - db) * t;
+    }
+    c.putImageData(data, 0, 0);
+    return canvas;
+  } catch {
+    return null;
+  }
 }

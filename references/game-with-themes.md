@@ -24,8 +24,8 @@ Creado (2026-11-02, con ROCAS). Archivos: `lib/games/skins.ts` (`SkinId`, `SKIN_
 | ------------- | --------------- | --------------------------- | ------- | ---- | ----- | -------------- | ----- | -------------------------------------------- |
 | ROCAS         | `rocas`         | `lib/games/asteroids/`      | ✅      | ✅   | ✅    | 5.48:1 (texto «3x» NEÓN); elementos ≥ 3.31:1 (rocas RETRO en esquina con viñeta) | 2026-11-02 | CLÁSICO: vectores blancos/azules sin glow sobre `#000`. RETRO: fósforo verde, scanlines 0.1 y viñeta 0.3. A revisar: fósforo verde (no ámbar) y power-up RETRO en verde-lima. |
 | CAÍDA         | `caida`         | `lib/games/caida/`          | ❌      | ❌   | ❌    | —              | —     | Solo el look neón original, sin skins.       |
-| BLOQUE BUSTER | `bloque-buster` | `lib/games/bloque-buster/`  | ❌      | ❌   | ❌    | —              | —     | Solo el look neón original, sin skins.       |
-| SERPENTINA    | `serpentina`    | `lib/games/serpentina/`     | ❌      | ❌   | ❌    | —              | —     | Solo el look neón original; sprite de frutas. |
+| BLOQUE BUSTER | `bloque-buster` | `lib/games/bloque-buster/`  | ✅      | ✅   | ✅    | 3.14:1 (ladrillo magenta NEÓN, en la banda de sombra del bisel); cuerpo de los elementos ≥ 5.45:1; sin texto en el canvas | 2026-11-02 | CLÁSICO: ladrillos planos con bisel, magenta→violeta, paleta plateada con extremos rojos, fondo `#000`. RETRO: fósforo verde, 3 brillos × 3 patrones (macizo/hueco/rayado) para que ningún par de vecinos coincida; scanlines 0.1, viñeta 0.3. A revisar: fósforo verde (no ámbar) y la equivalencia color→patrón en RETRO. |
+| SERPENTINA    | `serpentina`    | `lib/games/serpentina/`     | ✅      | ⚠    | ✅    | Sin texto en canvas. Elementos: CLÁSICO ≥ 5.62:1 (contorno de fruta 15.35:1), NEÓN serpiente 15.66:1 pero sprite morado 2.35:1 con halo, RETRO ≥ 3.19:1 (fruta tintada en esquina con scanline + viñeta; serpiente 3.31:1) | 2026-11-02 | Sprites: CLÁSICO los conserva sin halo y con contorno plano `#d9dce8`; RETRO usa una copia del atlas tintada a fósforo verde (rampa por brillo, en caché y con la imagen original como respaldo). NEÓN ⚠ sin cambios por regla: el halo blanco deja el sprite morado (`garlic`) en 2.35:1 y cabeza/cuerpo se distinguen solo por forma y ojos (1.08:1). A revisar: fósforo verde, contorno claro en CLÁSICO. |
 
 ## Historial
 
@@ -33,3 +33,5 @@ Creado (2026-11-02, con ROCAS). Archivos: `lib/games/skins.ts` (`SkinId`, `SKIN_
 | ---------- | ----- | ---------------------------------------- |
 | 2026-11-02 | —     | Creación de la referencia (estado inicial). |
 | 2026-11-02 | ROCAS | Sistema base de skins creado y skins CLÁSICO, NEÓN y RETRO aplicados a `rocas`. |
+| 2026-11-02 | SERPENTINA | Skins CLÁSICO, NEÓN y RETRO aplicados a `serpentina` (atlas tintado en RETRO, contorno de fruta en CLÁSICO). |
+| 2026-11-02 | BLOQUE BUSTER | Skins CLÁSICO, NEÓN y RETRO aplicados a `bloque-buster` (patrones de ladrillo en RETRO). |

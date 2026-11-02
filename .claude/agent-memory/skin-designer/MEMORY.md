@@ -14,4 +14,4 @@
 
 ## Criterios aprendidos
 
-- [Criterios y trampas de skins](criterios-skins.md) — luminancia en RETRO, fondo NEÓN #000, Prettier en globals.css, fuente sin Ó
+- [Criterios y trampas de skins](criterios-skins.md) — luminancia en RETRO, fondo NEÓN #000, Prettier en globals.css, fuente sin Ó, sprites (tintado/contorno), patrones RETRO, piloto automático, trabajo en paralelo

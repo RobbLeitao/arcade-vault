@@ -24,12 +24,14 @@ export const ENGINES: Record<string, EngineEntry> = {
     width: 800,
     height: 600,
     levels: 5,
+    skins: true,
     load: () =>
       import("./bloque-buster/engine").then((m) => m.createBloqueBuster),
   },
   serpentina: {
     width: 800,
     height: 600,
+    skins: true,
     load: async () => {
       const m = await import("./serpentina/engine");
       await m.loadFruitSprites();
