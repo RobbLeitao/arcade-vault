@@ -18,6 +18,7 @@ export const ENGINES: Record<string, EngineEntry> = {
   caida: {
     width: 420,
     height: 600,
+    skins: true,
     load: () => import("./caida/engine").then((m) => m.createCaida),
   },
   "bloque-buster": {
