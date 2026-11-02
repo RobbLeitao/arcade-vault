@@ -14,34 +14,14 @@ import {
   type Keys,
   type Palette,
 } from "./entities";
-import type { GameCallbacks, GameEngine } from "../contract";
+import type { CreateGameOptions, GameCallbacks, GameEngine } from "../contract";
+import { DEFAULT_SKIN, type SkinId } from "../skins";
+import { PALETTES } from "./skins";
 
 type State = "playing" | "dead" | "gameover";
 
 const START_LIVES = 3;
 const CONTROL_KEYS = ["ArrowLeft", "ArrowRight", "ArrowUp", "Space"];
-
-// Valores de respaldo iguales a los del tema (app/globals.css).
-const FALLBACK_PALETTE: Palette = {
-  ship: "#00f5ff",
-  rock: "#f5ff00",
-  bullet: "#e6e9ff",
-  powerUp: "#ff006e",
-  spark: "#f5ff00",
-};
-
-function readPalette(): Palette {
-  const style = getComputedStyle(document.documentElement);
-  const read = (name: string, fallback: string) =>
-    style.getPropertyValue(name).trim() || fallback;
-  return {
-    ship: read("--cyan", FALLBACK_PALETTE.ship),
-    rock: read("--yellow", FALLBACK_PALETTE.rock),
-    bullet: read("--ink", FALLBACK_PALETTE.bullet),
-    powerUp: read("--magenta", FALLBACK_PALETTE.powerUp),
-    spark: read("--yellow", FALLBACK_PALETTE.spark),
-  };
-}
 
 function isTextField(target: EventTarget | null) {
   return (
@@ -55,6 +35,7 @@ function isTextField(target: EventTarget | null) {
 export function createAsteroids(
   canvas: HTMLCanvasElement,
   callbacks: GameCallbacks,
+  options?: CreateGameOptions,
 ): GameEngine {
   const ctx = canvas.getContext("2d");
   if (!ctx) {
@@ -68,7 +49,27 @@ export function createAsteroids(
     };
   }
 
-  const palette = readPalette();
+  // ── Skin (paleta y efectos de pantalla) ─────────────────────────────────────
+  let palette: Palette;
+  let vignette: CanvasGradient | null = null;
+
+  function applyPalette(skin: SkinId) {
+    palette = PALETTES[skin]();
+    vignette = null;
+    if (palette.vignette > 0) {
+      vignette = ctx!.createRadialGradient(
+        W / 2,
+        H / 2,
+        H * 0.45,
+        W / 2,
+        H / 2,
+        W * 0.65,
+      );
+      vignette.addColorStop(0, "rgba(0, 0, 0, 0)");
+      vignette.addColorStop(1, `rgba(0, 0, 0, ${palette.vignette})`);
+    }
+  }
+  applyPalette(options?.skin ?? DEFAULT_SKIN);
 
   // ── Estado ──────────────────────────────────────────────────────────────────
   let ship: Ship;
@@ -307,12 +308,31 @@ export function createAsteroids(
   }
 
   function draw() {
-    ctx!.clearRect(0, 0, W, H);
-    particles.forEach((p) => p.draw(ctx!, palette));
-    asteroids.forEach((a) => a.draw(ctx!, palette));
-    powerUps.forEach((p) => p.draw(ctx!, palette));
-    bullets.forEach((b) => b.draw(ctx!, palette));
-    ship.draw(ctx!, palette);
+    const c = ctx!;
+    if (palette.background) {
+      c.fillStyle = palette.background;
+      c.fillRect(0, 0, W, H);
+    } else {
+      c.clearRect(0, 0, W, H);
+    }
+    particles.forEach((p) => p.draw(c, palette));
+    asteroids.forEach((a) => a.draw(c, palette));
+    powerUps.forEach((p) => p.draw(c, palette));
+    bullets.forEach((b) => b.draw(c, palette));
+    ship.draw(c, palette);
+    drawScreenEffects(c);
+  }
+
+  // Efectos de pantalla del skin (scanlines y viñeta), estáticos: sin parpadeo.
+  function drawScreenEffects(c: CanvasRenderingContext2D) {
+    if (palette.scanlines > 0) {
+      c.fillStyle = `rgba(0, 0, 0, ${palette.scanlines})`;
+      for (let y = 0; y < H; y += 3) c.fillRect(0, y, W, 1);
+    }
+    if (vignette) {
+      c.fillStyle = vignette;
+      c.fillRect(0, 0, W, H);
+    }
   }
 
   // ── Bucle ───────────────────────────────────────────────────────────────────
@@ -376,6 +396,12 @@ export function createAsteroids(
         draw();
       }
       startLoop();
+    },
+    setSkin(skin) {
+      if (destroyed) return;
+      applyPalette(skin);
+      // Con el bucle parado (pausa o fin) se redibuja para mostrar el cambio.
+      if (raf === null) draw();
     },
     destroy() {
       destroyed = true;

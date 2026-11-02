@@ -10,3 +10,8 @@
 - 2026-11-02: RETRO = monitor CRT / fósforo, paleta limitada.
 - 2026-11-02: el jugador elige el skin en el menú de pausa de `/jugar/[id]` (junto al selector de nivel); se recuerda por juego en localStorage (`av:skin:<gameId>`). Solo aparece en juegos con `skins: true` en el registro.
 - 2026-11-02: el agente implementa (no solo spec).
+- 2026-11-02: RETRO en fósforo verde (decisión del agente, a revisar con el usuario).
+
+## Criterios aprendidos
+
+- [Criterios y trampas de skins](criterios-skins.md) — luminancia en RETRO, fondo NEÓN #000, Prettier en globals.css, fuente sin Ó

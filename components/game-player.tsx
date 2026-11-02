@@ -7,6 +7,14 @@ import { submitScore } from "@/app/jugar/[id]/actions";
 import type { Game } from "@/lib/games";
 import type { HudStat } from "@/lib/games/contract";
 import { ENGINES } from "@/lib/games/registry";
+import {
+  DEFAULT_SKIN,
+  SKIN_IDS,
+  SKIN_LABELS,
+  loadSkin,
+  saveSkin,
+  type SkinId,
+} from "@/lib/games/skins";
 import { useSession } from "@/lib/session";
 
 const LIVES = 3;
@@ -21,6 +29,14 @@ export default function GamePlayer({ game }: { game: Game }) {
   const [lives, setLives] = useState<number | null>(LIVES);
   const [engineLevel, setEngineLevel] = useState(1);
   const [stats, setStats] = useState<HudStat[]>([]);
+  // Skin del juego (solo motores con `skins`). Se lee de localStorage solo en
+  // el cliente; no altera el HTML hidratado porque el selector solo aparece en
+  // la pausa y el canvas se pinta tras montar.
+  const [skin, setSkin] = useState<SkinId>(() =>
+    entry?.skins && typeof window !== "undefined"
+      ? loadSkin(game.id)
+      : DEFAULT_SKIN,
+  );
   const [paused, setPaused] = useState(false);
   const [over, setOver] = useState(false);
   const [typedName, setTypedName] = useState<string | null>(null);
@@ -179,6 +195,7 @@ export default function GamePlayer({ game }: { game: Game }) {
               ref={engineRef}
               gameId={game.id}
               label={`Juego ${game.title}`}
+              skin={entry.skins ? skin : undefined}
               onScore={setScore}
               onLives={setLives}
               onLevel={setEngineLevel}
@@ -239,6 +256,38 @@ export default function GamePlayer({ game }: { game: Game }) {
                           }}
                         >
                           {n}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {entry?.skins && (
+                  <div className="level-picker">
+                    <div
+                      id="skin-picker-label"
+                      className="level-picker-label mono"
+                    >
+                      SKIN
+                    </div>
+                    <div
+                      className="level-picker-list"
+                      role="group"
+                      aria-labelledby="skin-picker-label"
+                    >
+                      {SKIN_IDS.map((id) => (
+                        <button
+                          key={id}
+                          type="button"
+                          className={
+                            "btn skin-btn" + (id === skin ? " current" : "")
+                          }
+                          aria-pressed={id === skin}
+                          onClick={() => {
+                            setSkin(id);
+                            saveSkin(game.id, id);
+                          }}
+                        >
+                          {SKIN_LABELS[id]}
                         </button>
                       ))}
                     </div>

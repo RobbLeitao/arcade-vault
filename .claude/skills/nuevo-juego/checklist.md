@@ -63,7 +63,8 @@ No hay que tocar RLS, vistas ni `submitScore`: la política de inserción ya ace
 - [ ] Sin sesión, el modal conserva el campo de iniciales, guarda en `localStorage["av_scores"]` y muestra `INICIA SESIÓN PARA ENTRAR AL RANKING`; no se crea fila en `scores`.
 - [ ] Al pulsar `SALIR` o navegar a otra ruta se cancela el bucle y se quitan los listeners: las teclas del juego vuelven a su comportamiento normal y no hay errores en consola.
 - [ ] Con React StrictMode en desarrollo hay un único bucle activo.
-- [ ] Los colores del canvas salen de las variables del tema y el dibujo tiene brillo neón.
+- [ ] Los colores del canvas salen de las variables del tema y el dibujo tiene brillo neón (skin NEÓN).
+- [ ] El motor expone los 3 skins (CLÁSICO por defecto, NEÓN, RETRO) en `lib/games/<carpeta>/skins.ts`, soporta `setSkin` y declara `skins: true`; el selector de la pausa cambia el skin en caliente y se recuerda al recargar (`av:skin:<id>`).
 - [ ] El canvas conserva su proporción a 1280 px y a 390 px, y a 390 px `/jugar/<id>` no tiene scroll horizontal.
 - [ ] `/juegos/<id>` ya no muestra `PRÓXIMAMENTE` y la descripción corresponde a las mecánicas reales.
 - [ ] `get_advisors` de seguridad no reporta avisos nuevos tras la migración.

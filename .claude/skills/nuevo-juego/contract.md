@@ -88,3 +88,14 @@ export const ENGINES: Record<string, EngineEntry> = {
 7. Conservar constantes y mecánicas del original salvo decisión explícita en la spec.
 8. Sonido y assets, solo si la spec los incluye (`public/games/<id>/`, precargados antes de empezar); por defecto quedan fuera de alcance.
 9. El motor no guarda puntuaciones: solo llama a `onGameOver(finalScore)`. El guardado es de `GamePlayer` + `submitScore` (SPEC 06).
+10. Skins: el motor expone los 3 skins (CLÁSICO por defecto, NEÓN, RETRO) en `lib/games/<carpeta>/skins.ts`, soporta `setSkin` y declara `skins: true`. Detalle en la sección «Skins».
+
+## Skins
+
+Sistema base en `lib/games/skins.ts` (`SkinId = "clasico" | "neon" | "retro"`, `SKIN_IDS`, `DEFAULT_SKIN = "clasico"`, `SKIN_LABELS`, `loadSkin`/`saveSkin` con clave `av:skin:<gameId>`). Referencia de implementación: ROCAS (`lib/games/asteroids/skins.ts`).
+
+- `lib/games/<carpeta>/skins.ts` exporta `PALETTES: Record<SkinId, () => Palette>` (o `Record<SkinId, Palette>`): TypeScript falla si falta un skin. NEÓN reutiliza las variables CSS del tema (regla 3) sin cambio visual; CLÁSICO es plano sin glow; RETRO es CRT/fósforo con paleta limitada.
+- Los efectos son campos de la paleta (`background`, `glow` como multiplicador de `shadowBlur`, `scanlines`, `vignette`…), nunca `if (skin === …)` en el motor.
+- `CreateGame` recibe `options?: { skin?: SkinId }` (por defecto `DEFAULT_SKIN`) y el motor implementa `setSkin(skin)`: cambia la paleta en caliente sin reiniciar ni tocar puntuación, vidas o nivel, y redibuja si el bucle está parado (pausa).
+- `skins: true` en su entrada de `ENGINES` activa el selector de skin en el menú de pausa de `GamePlayer`.
+- Modo oscuro: fondo del canvas ≤ luminancia de `--bg-3`, elementos ≥ 3:1 y texto del canvas ≥ 4.5:1. Estado por juego en `references/game-with-themes.md` (lo mantiene el agente `skin-designer`).

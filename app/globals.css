@@ -1364,7 +1364,10 @@ a { color: inherit; text-decoration: none; }
   margin-top: 10px;
 }
 .btn.level-btn { min-width: 44px; padding: 10px 14px; }
-.btn.level-btn.current {
+/* Selector de skin en la pausa (motores con `skins` en el registro): mismo estilo */
+.btn.skin-btn { padding: 10px 14px; }
+.btn.level-btn.current,
+.btn.skin-btn.current {
   border-color: var(--yellow); color: var(--yellow);
   box-shadow: 0 0 12px rgba(245,255,0,0.5), inset 0 0 8px rgba(245,255,0,0.3);
 }
