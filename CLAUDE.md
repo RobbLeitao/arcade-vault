@@ -27,6 +27,7 @@ Para añadir un juego a la plataforma (portado desde `references/started-games/`
 - `.claude/agents/game-planner.md` (Opus): planifica y decide qué juego encaja en la plataforma antes de `/nuevo-juego`. Lee el catálogo (`references/implemented-games.md`, seed de `games`, `references/started-games/`, registro de motores), puntúa 3 candidatos con una rúbrica y recomienda uno con su ficha. No escribe specs ni código.
 - Tiene memoria persistente de proyecto (`memory: project`) en `.claude/agent-memory/game-planner/`: `suggestions.md` registra cada candidato sugerido con su estado (`sugerido`/`recomendado`/`elegido`/`descartado`/`implementado`) y `MEMORY.md` las preferencias del usuario. Se versiona en git; no la borres.
 - Flujo para un juego nuevo: `game-planner` → `/nuevo-juego` → `/spec-impl`.
+- `.claude/agents/game-jam.md` (Opus): recibe un tema, diseña un juego original que lo interprete y escribe 3 specs completas del mismo juego en `specs/game-jam/<id>/` (`01-<id>-esencial.md`, `02-<id>-niveles.md`, `03-<id>-ambiciosa.md`), con el formato de las SPEC 07–09. Decide sin preguntar y marca sus decisiones «a revisar». Memoria en `.claude/agent-memory/game-jam/` (`jams.md`); lee la de `game-planner` sin modificarla. Flujo: `game-jam <tema>` → elegir variante → copiarla a `specs/NN-juego-<id>.md` → `/spec-impl`.
 
 ## Hooks
 
