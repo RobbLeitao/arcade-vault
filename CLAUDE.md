@@ -4,21 +4,60 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Arcade Vault: a platform for playing games online and competing for the highest score (per README, written in Spanish). The repo is currently a fresh Create Next App scaffold (`app/page.tsx` is still the template). The project follows a spec-driven workflow (`/spec` and `/spec-impl`) using the skills from `Klerith/fernando-skills` (`npx skills@latest add Klerith/fernando-skills`).
+Arcade Vault: a retro arcade platform to play browser games and compete for the highest score. UI copy, specs, comments and commit context are in Spanish. Backend is Supabase (auth + Postgres with RLS); contact email goes through Resend.
+
+Spec-driven workflow: every feature has a spec in `specs/NN-slug.md` (01–09 implemented: visual MVP, home/about, contact email, Supabase + auth, ROCAS, leaderboard + `games` table, CAÍDA, BLOQUE BUSTER, SERPENTINA). `/spec` writes a spec, `/spec-impl` implements it on a branch `spec-NN-slug` (auto-created, see `specs/.spec-config.yml`) and sets the spec's `Estado` to `Implementado`.
+
+Commands: `npm run dev`, `npm run build`, `npm run lint`. There is no test suite; verify in the browser (Playwright MCP is available).
 
 ## Next.js version caveat
 
-This is Next.js 16.4.3 with React 19.3 — APIs differ from older training data. Per `AGENTS.md`, read the relevant guide in `node_modules/next/dist/docs/` (`01-app`, `02-pages`, `03-architecture`, `04-community`) before writing Next.js code, and heed deprecation notices.
+This is Next.js 16.4.3 with React 19.3 — APIs differ from older training data. Per `AGENTS.md`, read the relevant guide in `node_modules/next/dist/docs/` (`01-app`, `02-pages`, `03-architecture`, `04-community`) before writing Next.js code, and heed deprecation notices. Notably, middleware is `proxy.ts` (not `middleware.ts`).
 
 ## Skills
 
 Usa siempre /frontend-design para diseñar la interfaz de usuario.
 Para añadir un juego a la plataforma (portado desde `references/started-games/` o nuevo) con su leaderboard, usa `/nuevo-juego`: genera la spec en `specs/` y luego se implementa con `/spec-impl`.
 
-## Architecture notes
+- `.claude/skills/spec` y `spec-impl`: de `Klerith/fernando-skills` (registrados en `skills-lock.json`; copia en `.agents/skills/`). Reinstalar con `npx skills@latest add Klerith/fernando-skills`.
+- `.claude/skills/nuevo-juego`: skill propio. `contract.md` (contrato del motor y registro) y `checklist.md` (criterios, plantillas SQL) son la referencia para cualquier juego nuevo.
 
-- App Router only (`app/`); `@/*` path alias maps to the repo root.
-- `next.config.ts` enables `cacheComponents`, `partialPrefetching` and `experimental.agentFeedback`. With Cache Components, dynamic/uncached data access must be handled per the version's docs (e.g. Suspense boundaries / explicit caching) — check the docs before fetching data in routes.
-- `app/layout.tsx` uses the globally generated `LayoutProps<"/">` type (no import), and the Geist fonts via `next/font/google`.
-- Tailwind CSS v4 is wired through Turbopack rules in `next.config.ts` (`@tailwindcss/turbopack` loader for `*.css`), not a PostCSS config. Theme tokens live in `app/globals.css` (`@theme inline`, with a `prefers-color-scheme` dark override).
+## Hooks
+
+`.claude/settings.json` runs `.claude/hooks/format-file.mjs` after every Write/Edit: Prettier `--write` and, for JS/TS, `eslint --fix`. ESLint errors block the edit (exit 2) — fix them rather than bypassing. `references/`, `.next` and `node_modules` are skipped.
+
+## Architecture
+
+### Routes (`app/`, App Router only; `@/*` maps to repo root)
+
+- `/` home, `/biblioteca` game library, `/juegos/[id]` game detail + top 10, `/jugar/[id]` player, `/salon-de-la-fama` hall of fame, `/acerca-de` about + contact form, `/acceso` login/signup, `/auth/callback` OAuth/email-confirm code exchange (only relative `next` redirects allowed).
+- Server actions: `app/jugar/[id]/actions.ts` (`submitScore`, then `updateTag("scores")`) and `app/acerca-de/actions.ts` (`sendContact`: honeypot field `website`, in-memory IP rate limit via `lib/rate-limit.ts`, validation in `lib/contact.ts`, sends with Resend).
+
+### Data & Supabase
+
+- Clients in `lib/supabase/`: `server.ts` (cookies, for actions/route handlers), `client.ts` (browser), `proxy.ts` (session refresh, used by root `proxy.ts`), `public.ts` (no session/cookies — the only one allowed inside `"use cache"`, sees what RLS allows `anon`).
+- `lib/games-data.ts` reads `games` + `game_stats` view and the `leaderboard` view with `"use cache"`, `cacheLife("hours")` and tags `games`/`scores`. Cached functions throw on error; exported getters return `Loaded<T>` (`{ok:false}` on failure, `data: null` = 404).
+- Schema in `supabase/migrations/`: `profiles`, `games` (catalog, `playable`, `max_score`, `sort_order`), `scores` (RLS: insert only own score, only for playable games and `score <= max_score`), views `leaderboard` and `game_stats`. Each new playable game adds a migration flipping `playable` and setting `max_score`. The Supabase MCP (`.mcp.json`) can apply migrations and run SQL.
+- `lib/session.tsx`: client `SessionProvider`/`useSession` (Supabase auth user, `signOut`, local `saveScore` fallback in localStorage).
+- Shared types/formatters in `lib/games.ts` (`Game`, `ScoreRow`, `GameColor`, `formatScoreDate` in Europe/Madrid for hydration-safe dates).
+- Env vars: see `.env.example` (Resend + Supabase URL/publishable key).
+
+### Game engines (`lib/games/`)
+
+- `contract.ts` defines `CreateGame(canvas, callbacks) => GameEngine` (pause/resume/restart/end/destroy, optional `goToLevel`) and callbacks for score, lives, level, HUD stats, game over and pause key. Engines are framework-free canvas code.
+- `registry.ts` (`ENGINES`) maps game id → logical canvas size, optional `levels` (level selector in pause) and a dynamic `load()` import (one chunk per engine; may preload assets, e.g. Serpentina sprites).
+- Engines: `asteroids/` (id `rocas`), `caida/`, `bloque-buster/` (5 levels, sounds), `serpentina/` (sprite atlas). Each has `engine.ts` + `entities.ts`. Assets live in `public/games/<id>/`. (see `references\implemented-games.md`) when you need to check which games are implemented and how to implement new ones.
+- `components/game-canvas.tsx` mounts any registered engine; `components/game-player.tsx` owns HUD, pause, game-over modal and score submission. Games not in `ENGINES` stay simulated.
+- Original sources to port are in `references/started-games/` (reference only, not part of the build).
+
+### Styling
+
+- Tailwind CSS v4 via the `@tailwindcss/turbopack` loader in `next.config.ts` (no PostCSS config). `app/globals.css` holds the dark neon theme tokens (`--bg`, `--ink`, `--cyan`, `--magenta`, `--yellow`, `--green`, `--gold`…, exposed through `@theme inline`) plus most component classes (`.pixel`, `.mono`, `.av-nav`, `.hud-stat`, `.modal`…).
+- Fonts in `app/layout.tsx` via `next/font/google`: Press Start 2P (pixel), JetBrains Mono, Courier Prime. Layout uses the global `LayoutProps<"/">` type (no import).
+
+## Config notes
+
+- `next.config.ts` enables `cacheComponents`, `partialPrefetching` and `experimental.agentFeedback`. With Cache Components, uncached/dynamic access (cookies, `searchParams`, auth) must sit inside a `<Suspense>` boundary (see `app/acceso/page.tsx`), and cached reads use `"use cache"` + tags.
+- If `npm run dev` shows stale styles, delete `.next/dev/cache/turbopack`.
+- Save Playwright screenshots in `.playwright-screenshots/`.
 - `AGENTS.md` is re-generated by `next dev`; leave it in place.
