@@ -620,6 +620,7 @@ a { color: inherit; text-decoration: none; }
 .hud-stat .v { font-family: var(--pixel); font-size: 16px; color: var(--cyan); text-shadow: 0 0 6px rgba(0,245,255,0.5); }
 .hud-stat.lives .v { color: var(--magenta); text-shadow: 0 0 6px rgba(255,0,110,0.5); }
 .hud-stat.level .v { color: var(--yellow); text-shadow: 0 0 6px rgba(245,255,0,0.5); }
+.hud-stats { display: flex; gap: 24px; flex-wrap: wrap; }
 .hud-actions { display: flex; gap: 10px; }
 
 .crt {
@@ -1351,8 +1352,284 @@ a { color: inherit; text-decoration: none; }
   margin-inline: auto;
 }
 
+/* ===== Mando táctil (SPEC 10) =====
+   Panel de mandos de recreativa: teclas de dirección cuadradas con canto
+   (relieve) y botones de acción redondos. Solo se monta con pointer coarse. */
+.touch-pad {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 14px;
+  padding: 0 4px;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.touch-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  touch-action: none;
+}
+.touch-actions {
+  gap: 14px;
+}
+
+.touch-btn {
+  --key: var(--cyan);
+  --key-glow: rgba(0, 245, 255, 0.55);
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 60px;
+  height: 60px;
+  padding: 0;
+  border: 2px solid var(--key);
+  border-radius: 10px;
+  background: linear-gradient(180deg, #1d1d2a, var(--bg-3));
+  color: var(--key);
+  /* flechas en mono: la fuente pixel no tiene todas y mezclaría estilos */
+  font-family: var(--mono);
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+  /* canto inferior: la tecla «sube» sobre el panel */
+  box-shadow:
+    0 5px 0 #050507,
+    0 5px 0 1px var(--ink-faint);
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform 60ms ease,
+    box-shadow 60ms ease,
+    background 60ms ease;
+}
+.touch-btn > span {
+  pointer-events: none;
+  text-shadow: 0 0 8px var(--key-glow);
+}
+.touch-btn.pressed {
+  transform: translateY(4px);
+  background: var(--key);
+  color: var(--bg);
+  box-shadow:
+    0 1px 0 #050507,
+    0 0 18px var(--key-glow);
+}
+.touch-btn.pressed > span {
+  text-shadow: none;
+}
+.touch-btn:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 4px;
+}
+
+/* Acciones: botones redondos de recreativa (magenta; el segundo, amarillo) */
+.touch-btn.touch-btn-word {
+  --key: var(--magenta);
+  --key-glow: rgba(255, 0, 110, 0.6);
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  border-width: 3px;
+  background: radial-gradient(circle at 50% 35%, #2a1220, var(--bg-3) 70%);
+  font-family: var(--pixel);
+  font-weight: 400;
+  font-size: 8px;
+  letter-spacing: 0;
+}
+.touch-actions .touch-btn-word:nth-child(2) {
+  --key: var(--yellow);
+  --key-glow: rgba(245, 255, 0, 0.55);
+  background: radial-gradient(circle at 50% 35%, #26281a, var(--bg-3) 70%);
+}
+
+/* Pulsado de los botones redondos: tras sus fondos, para que se rellenen */
+.touch-group .touch-btn.pressed {
+  background: var(--key);
+  color: var(--bg);
+}
+
+/* Cruceta (SERPENTINA): rejilla 3×3 con pivote central */
+.touch-cross {
+  display: grid;
+  grid-template-columns: repeat(3, 56px);
+  grid-template-rows: repeat(3, 56px);
+  gap: 4px;
+}
+.touch-cross .touch-btn {
+  width: 56px;
+  height: 56px;
+}
+.touch-cross .touch-up {
+  grid-area: 1 / 2;
+}
+.touch-cross .touch-left {
+  grid-area: 2 / 1;
+}
+.touch-cross .touch-right {
+  grid-area: 2 / 3;
+}
+.touch-cross .touch-down {
+  grid-area: 3 / 2;
+}
+.touch-cross::before {
+  content: "";
+  grid-area: 2 / 2;
+  place-self: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  background: var(--bg-3);
+}
+
+/* En pausa los botones no responden */
+.touch-pad.is-disabled .touch-btn {
+  opacity: 0.35;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .touch-btn {
+    transition: none;
+  }
+}
+
+/* Con pointer coarse: marco CRT más fino y canvas ajustado al alto disponible
+   (descuenta nav, HUD compacto, mando y márgenes) para que todo quepa sin scroll. */
+@media (pointer: coarse) {
+  .player-stage.has-touch .crt {
+    padding: 10px;
+    border-radius: 18px;
+  }
+  .player-stage.has-touch .crt-bottom {
+    margin-top: 6px;
+    font-size: 7px;
+  }
+  .player-stage.has-touch .crt.crt-fit {
+    max-width: max(
+      240px,
+      calc((100dvh - 400px) * var(--game-aspect, 1.3333) + 20px)
+    );
+  }
+}
+
+/* Vertical con pointer coarse: teclas algo menores para que la fila de
+   dirección y dos botones de acción (CAÍDA) quepan en 390 px. */
+@media (orientation: portrait) and (pointer: coarse) {
+  .touch-group { gap: 8px; }
+  .touch-actions { gap: 12px; }
+  .touch-btn { width: 54px; height: 54px; }
+  .touch-btn.touch-btn-word { width: 66px; height: 66px; }
+}
+
+/* Horizontal con pointer coarse: dirección a la izquierda del canvas y acciones
+   a la derecha. El mando se «disuelve» para que cada grupo ocupe su columna. */
+@media (orientation: landscape) and (pointer: coarse) {
+  .player-stage.has-touch {
+    display: grid;
+    grid-template-columns: minmax(150px, 1fr) minmax(0, auto) minmax(150px, 1fr);
+    align-items: center;
+    gap: 12px;
+  }
+  .player-stage.has-touch .crt {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .player-stage.has-touch .crt.crt-fit {
+    width: calc((100dvh - 140px) * var(--game-aspect, 1.3333) + 20px);
+    max-width: 100%;
+  }
+  /* sin el pie decorativo del CRT: el alto es para el canvas */
+  .player-stage.has-touch .crt-bottom {
+    display: none;
+  }
+  .player-stage.has-touch .touch-pad {
+    display: contents;
+  }
+  .player-stage.has-touch .touch-move {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: center;
+  }
+  .player-stage.has-touch .touch-actions {
+    grid-column: 3;
+    grid-row: 1;
+    justify-self: center;
+    flex-direction: column;
+  }
+}
+
+/* Nav compacta solo en la pantalla de juego con mando, en móvil horizontal:
+   deja el logo, la sesión y el menú ☰ (que ya existe por debajo de 840 px). */
+@media (orientation: landscape) and (pointer: coarse) and (max-height: 500px) {
+  body:has(.player-stage.has-touch) .av-nav { padding: 6px 16px; gap: 12px; }
+  body:has(.player-stage.has-touch) .av-nav .links,
+  body:has(.player-stage.has-touch) .av-nav .coin-counter { display: none; }
+  body:has(.player-stage.has-touch) .av-nav .hamburger { display: inline-flex; }
+  body:has(.player-stage.has-touch) .av-nav .btn { padding: 8px 12px; font-size: 8px; }
+}
+
+/* HUD compacto en pantallas estrechas (y en móvil horizontal, de poca altura) */
+@media (max-width: 720px),
+  (orientation: landscape) and (pointer: coarse) and (max-height: 500px) {
+  .av-player {
+    margin-top: 10px;
+  }
+  .player-hud {
+    padding: 8px 10px;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .hud-stats {
+    gap: 6px 16px;
+  }
+  .hud-stat {
+    gap: 2px;
+  }
+  .hud-stat .l {
+    font-size: 8px;
+  }
+  .hud-stat .v {
+    font-size: 11px;
+  }
+  .hud-actions {
+    gap: 8px;
+  }
+  .hud-actions .btn {
+    padding: 8px 10px;
+    font-size: 8px;
+    letter-spacing: 0.1em;
+  }
+}
+@media (max-width: 720px) {
+  .hud-actions {
+    width: 100%;
+  }
+  .hud-actions .btn {
+    flex: 1;
+  }
+}
+
 /* Fin de partida con sesion: sin campo de iniciales, el boton va centrado */
 .modal .input-row.solo { justify-content: center; }
+
+/* Fin de partida en móvil: iniciales y GUARDAR apilados a todo el ancho
+   (en fila, el botón se salía del modal en ~400 px) */
+@media (max-width: 520px) {
+  .modal { padding: 24px 18px; }
+  .modal h2 { font-size: 18px; }
+  .modal .input-row { flex-direction: column; }
+  .modal .input-row input { flex: none; width: 100%; }
+  .modal .input-row .btn { width: 100%; }
+}
 
 /* Selector de nivel en la pausa (motores con `levels` en el registro) */
 .level-picker { margin-top: 22px; }
