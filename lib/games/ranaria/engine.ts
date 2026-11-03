@@ -40,8 +40,13 @@ import type {
 } from "../contract";
 import { DEFAULT_SKIN, type SkinId } from "../skins";
 import { PALETTES } from "./skins";
+import { createSpriteSet } from "./sprites";
 
-const MAX_DT = 0.05; // s; acota el salto de tiempo tras una pausa o un cambio de pestaña
+// Bucle de paso fijo (SPEC 12): la simulación avanza siempre en pasos de STEP,
+// igual a 60, 120 o 144 Hz. MAX_FRAME acota lo simulado por frame: por debajo
+// de 10 fps el juego va a cámara lenta en vez de teletransportar entidades.
+const STEP = 1 / 240; // s de simulación por paso
+const MAX_FRAME = 0.1; // s máximos simulados por frame
 
 const DELTAS: Record<Direction, { col: number; row: number }> = {
   up: { col: 0, row: -1 },
@@ -73,6 +78,43 @@ function isTextField(target: EventTarget | null) {
   );
 }
 
+/** Canvas fuera de pantalla del tamaño del tablero. */
+function createLayer(): HTMLCanvasElement {
+  const layer = document.createElement("canvas");
+  layer.width = W;
+  layer.height = H;
+  return layer;
+}
+
+/** Scanlines y viñeta del skin en una capa; null si el skin no tiene efectos. */
+function paintEffects(palette: Palette): HTMLCanvasElement | null {
+  if (palette.scanlines <= 0 && palette.vignette <= 0) return null;
+  const layer = createLayer();
+  const c = layer.getContext("2d");
+  if (!c) return null;
+  if (palette.scanlines > 0) {
+    c.fillStyle = `rgba(0, 0, 0, ${palette.scanlines})`;
+    for (let y = 0; y < H; y += 3) c.fillRect(0, y, W, 1);
+  }
+  if (palette.vignette > 0) {
+    // Radios a partir de la semidiagonal: transición suave hasta las esquinas.
+    const d = Math.hypot(W, H) / 2;
+    const vignette = c.createRadialGradient(
+      W / 2,
+      H / 2,
+      d * 0.6,
+      W / 2,
+      H / 2,
+      d,
+    );
+    vignette.addColorStop(0, "rgba(0, 0, 0, 0)");
+    vignette.addColorStop(1, `rgba(0, 0, 0, ${palette.vignette})`);
+    c.fillStyle = vignette;
+    c.fillRect(0, 0, W, H);
+  }
+  return layer;
+}
+
 export function createRanaria(
   canvas: HTMLCanvasElement,
   callbacks: GameCallbacks,
@@ -90,27 +132,23 @@ export function createRanaria(
     };
   }
 
+  // ── Capas cacheadas (SPEC 12) ───────────────────────────────────────────────
+  // Fondo del tablero: solo se repinta al cambiar el skin o las bocas ocupadas.
+  const board = createLayer();
+  let boardDirty = true;
+  // Scanlines + viñeta del skin, pintadas una vez; null si el skin no tiene.
+  let effects: HTMLCanvasElement | null = null;
+  // Formas de entidades y rana con su glow, creadas al primer uso.
+  const sprites = createSpriteSet();
+
   // ── Skin (paleta y efectos de pantalla) ─────────────────────────────────────
   let palette: Palette;
-  let vignette: CanvasGradient | null = null;
 
   function applyPalette(skin: SkinId) {
     palette = PALETTES[skin]();
-    vignette = null;
-    if (palette.vignette > 0) {
-      // Radios a partir de la semidiagonal: transición suave hasta las esquinas.
-      const d = Math.hypot(W, H) / 2;
-      vignette = ctx!.createRadialGradient(
-        W / 2,
-        H / 2,
-        d * 0.6,
-        W / 2,
-        H / 2,
-        d,
-      );
-      vignette.addColorStop(0, "rgba(0, 0, 0, 0)");
-      vignette.addColorStop(1, `rgba(0, 0, 0, ${palette.vignette})`);
-    }
+    sprites.clear();
+    boardDirty = true;
+    effects = paintEffects(palette);
   }
   applyPalette(options?.skin ?? DEFAULT_SKIN);
 
@@ -130,6 +168,7 @@ export function createRanaria(
   let destroyed = false;
   let raf: number | null = null;
   let lastTime: number | null = null;
+  let acc = 0; // s pendientes de simular
 
   // ── Callbacks (solo al cambiar el valor) ────────────────────────────────────
   let sentScore = NaN;
@@ -264,6 +303,7 @@ export function createRanaria(
         return false;
       }
       goals[i] = true;
+      boardDirty = true; // la boca muestra su rana
       score +=
         POINTS_STEP +
         POINTS_GOAL +
@@ -283,6 +323,7 @@ export function createRanaria(
   function completeRound() {
     score += POINTS_ROUND;
     goals = [false, false, false, false, false];
+    boardDirty = true; // bocas vacías
     level++;
     lanes = buildLanes(level);
   }
@@ -332,6 +373,7 @@ export function createRanaria(
     level = 1;
     lanes = buildLanes(level);
     goals = [false, false, false, false, false];
+    boardDirty = true;
     score = 0;
     lives = START_LIVES;
     respawn();
@@ -372,32 +414,33 @@ export function createRanaria(
   // ── Dibujo ──────────────────────────────────────────────────────────────────
   function draw() {
     const c = ctx!;
-    c.clearRect(0, 0, W, H);
-    drawBoard(c, palette, goals);
-    for (const lane of lanes) drawLane(c, palette, lane);
-    drawFrog(c, palette, frog);
-    drawScreenEffects(c);
-  }
-
-  // Efectos de pantalla del skin (scanlines y viñeta), estáticos: sin parpadeo.
-  function drawScreenEffects(c: CanvasRenderingContext2D) {
-    if (palette.scanlines > 0) {
-      c.fillStyle = `rgba(0, 0, 0, ${palette.scanlines})`;
-      for (let y = 0; y < H; y += 3) c.fillRect(0, y, W, 1);
+    if (boardDirty) {
+      const b = board.getContext("2d");
+      if (b) {
+        b.clearRect(0, 0, W, H);
+        drawBoard(b, palette, goals);
+      }
+      boardDirty = false;
     }
-    if (vignette) {
-      c.fillStyle = vignette;
-      c.fillRect(0, 0, W, H);
-    }
+    // El fondo es opaco y cubre todo el canvas: no hace falta clearRect.
+    c.drawImage(board, 0, 0);
+    for (const lane of lanes) drawLane(c, palette, lane, sprites);
+    drawFrog(c, palette, frog, sprites);
+    // Efectos de pantalla del skin, estáticos: sin parpadeo.
+    if (effects) c.drawImage(effects, 0, 0);
   }
 
   // ── Bucle ───────────────────────────────────────────────────────────────────
   function loop(ts: number) {
     raf = null;
-    const dt = lastTime === null ? 0 : Math.min((ts - lastTime) / 1000, MAX_DT);
+    const elapsed = lastTime === null ? 0 : (ts - lastTime) / 1000;
     lastTime = ts;
-    update(dt);
-    if (finished) return;
+    acc += Math.min(elapsed, MAX_FRAME);
+    while (acc >= STEP) {
+      update(STEP);
+      acc -= STEP;
+      if (finished) return; // finish() ya dibujó el último frame
+    }
     emit();
     draw();
     raf = requestAnimationFrame(loop);
@@ -406,6 +449,7 @@ export function createRanaria(
   function startLoop() {
     if (raf !== null || destroyed || finished) return;
     lastTime = null;
+    acc = 0;
     raf = requestAnimationFrame(loop);
   }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import GameCanvas, { type GameHandle } from "@/components/game-canvas";
 import TouchControls from "@/components/touch-controls";
 import { submitScore } from "@/app/jugar/[id]/actions";
@@ -21,15 +21,35 @@ import { useSession } from "@/lib/session";
 const LIVES = 3;
 const POINTS_PER_LEVEL = 2500;
 
+const formatLevel = (n: number) => String(n).padStart(2, "0");
+
+/** Escribe valor y color de un stat en su nodo `.v` del HUD. */
+function paintStat(el: HTMLDivElement, stat: HudStat) {
+  el.textContent = stat.value;
+  el.style.color = `var(--${stat.color ?? "cyan"})`;
+}
+
 export default function GamePlayer({ game }: { game: Game }) {
   const { user, saveScore } = useSession();
   // Los juegos con motor en el registro corren reales; el resto sigue simulado.
   const entry = ENGINES[game.id];
   const engineRef = useRef<GameHandle>(null);
-  const [score, setScore] = useState(0);
+  // Puntuación fuera del estado de React (SPEC 12): cambia durante la partida y
+  // se escribe directamente en el DOM, sin re-renderizar el reproductor.
+  const scoreRef = useRef(0);
+  const scoreElRef = useRef<HTMLDivElement | null>(null); // .v de Puntuación
+  const levelElRef = useRef<HTMLDivElement | null>(null); // .v de Nivel (solo simulados)
+  const [finalScore, setFinalScore] = useState(0); // se fija al terminar
   const [lives, setLives] = useState<number | null>(LIVES);
   const [engineLevel, setEngineLevel] = useState(1);
-  const [stats, setStats] = useState<HudStat[]>([]);
+  // Stats del motor (SPEC 12): los valores van por ref al DOM; solo el
+  // conjunto de stats (claves y etiquetas) está en el estado y provoca render.
+  const statsRef = useRef<HudStat[]>([]); // últimos stats recibidos
+  const statElsRef = useRef(new Map<string, HTMLDivElement>()); // .v por stat.key
+  const statSigRef = useRef(""); // firma "key|label;…" del layout vigente
+  const [statLayout, setStatLayout] = useState<
+    { key: string; label: string }[]
+  >([]);
   // Skin del juego (solo motores con `skins`). Se lee de localStorage solo en
   // el cliente; no altera el HTML hidratado porque el selector solo aparece en
   // la pausa y el canvas se pinta tras montar.
@@ -56,7 +76,57 @@ export default function GamePlayer({ game }: { game: Game }) {
   // Hasta que el usuario edita el campo, el nombre sigue a la sesión
   // (que llega tras la hidratación).
   const name = typedName ?? user?.name ?? "INVITADO";
-  const level = entry ? engineLevel : 1 + Math.floor(score / POINTS_PER_LEVEL);
+
+  // Escribe la puntuación (y, en los simulados, el nivel que se deriva de ella)
+  // en sus nodos del HUD. Los nodos no tienen hijos en el JSX: React no los pisa.
+  const paintScore = useCallback(() => {
+    const v = scoreRef.current;
+    if (scoreElRef.current)
+      scoreElRef.current.textContent = v.toLocaleString("es-ES");
+    if (!entry && levelElRef.current)
+      levelElRef.current.textContent = formatLevel(
+        1 + Math.floor(v / POINTS_PER_LEVEL),
+      );
+  }, [entry]);
+
+  const writeScore = useCallback(
+    (v: number) => {
+      scoreRef.current = v;
+      paintScore();
+    },
+    [paintScore],
+  );
+
+  // Valores y colores van directos a los nodos; solo un cambio de claves o
+  // etiquetas (al empezar la partida) actualiza el estado y re-renderiza.
+  const handleStats = useCallback((s: HudStat[]) => {
+    statsRef.current = s;
+    const sig = s.map((x) => `${x.key}|${x.label}`).join(";");
+    if (sig !== statSigRef.current) {
+      statSigRef.current = sig;
+      setStatLayout(s.map(({ key, label }) => ({ key, label })));
+    }
+    for (const stat of s) {
+      const el = statElsRef.current.get(stat.key);
+      if (el) paintStat(el, stat);
+    }
+  }, []);
+
+  // Ref callbacks: al montar el nodo escriben el valor vigente.
+  const setScoreEl = useCallback(
+    (el: HTMLDivElement | null) => {
+      scoreElRef.current = el;
+      paintScore();
+    },
+    [paintScore],
+  );
+  const setLevelEl = useCallback(
+    (el: HTMLDivElement | null) => {
+      levelElRef.current = el;
+      paintScore();
+    },
+    [paintScore],
+  );
 
   useEffect(() => {
     if (!entry) return;
@@ -78,14 +148,14 @@ export default function GamePlayer({ game }: { game: Game }) {
   useEffect(() => {
     if (entry || over || paused) return;
     const t = setInterval(
-      () => setScore((s) => s + Math.floor(10 + Math.random() * 90)),
+      () => writeScore(scoreRef.current + Math.floor(10 + Math.random() * 90)),
       220,
     );
     return () => clearInterval(t);
-  }, [entry, over, paused]);
+  }, [entry, over, paused, writeScore]);
 
   const restart = () => {
-    setScore(0);
+    writeScore(0);
     setPaused(false);
     setOver(false);
     setSaved(false);
@@ -99,17 +169,21 @@ export default function GamePlayer({ game }: { game: Game }) {
 
   const finish = () => {
     if (entry) engineRef.current?.end();
-    else setOver(true);
+    else {
+      setFinalScore(scoreRef.current);
+      setOver(true);
+    }
   };
 
-  const handleGameOver = (finalScore: number) => {
-    setScore(finalScore);
+  const handleGameOver = (v: number) => {
+    writeScore(v);
+    setFinalScore(v);
     setPaused(false);
     setOver(true);
   };
 
   const saveLocal = () => {
-    saveScore({ game: game.id, score, name });
+    saveScore({ game: game.id, score: scoreRef.current, name });
     setSaved(true);
   };
 
@@ -122,7 +196,7 @@ export default function GamePlayer({ game }: { game: Game }) {
     const run = runRef.current;
     setSaving(true);
     setSaveFailed(false);
-    const result = await submitScore(game.id, score);
+    const result = await submitScore(game.id, scoreRef.current);
     if (run !== runRef.current) return;
     setSaving(false);
     if (result.ok) {
@@ -147,7 +221,8 @@ export default function GamePlayer({ game }: { game: Game }) {
           </div>
           <div className="hud-stat">
             <div className="l">Puntuación</div>
-            <div className="v">{score.toLocaleString("es-ES")}</div>
+            {/* Sin hijos: el valor lo escribe writeScore por ref. */}
+            <div className="v" ref={setScoreEl} />
           </div>
           {lives !== null && (
             <div className="hud-stat lives">
@@ -157,17 +232,29 @@ export default function GamePlayer({ game }: { game: Game }) {
           )}
           <div className="hud-stat level">
             <div className="l">Nivel</div>
-            <div className="v">{String(level).padStart(2, "0")}</div>
+            {entry ? (
+              <div className="v">{formatLevel(engineLevel)}</div>
+            ) : (
+              // Simulados: el nivel sale de la puntuación y se escribe por ref.
+              <div className="v" ref={setLevelEl} />
+            )}
           </div>
-          {stats.map((stat) => (
-            <div key={stat.key} className="hud-stat">
-              <div className="l">{stat.label}</div>
+          {statLayout.map(({ key, label }) => (
+            <div key={key} className="hud-stat">
+              <div className="l">{label}</div>
+              {/* Sin hijos ni style: valor y color los escribe handleStats. */}
               <div
                 className="v"
-                style={{ color: `var(--${stat.color ?? "cyan"})` }}
-              >
-                {stat.value}
-              </div>
+                ref={(el) => {
+                  if (!el) return;
+                  statElsRef.current.set(key, el);
+                  const stat = statsRef.current.find((s) => s.key === key);
+                  if (stat) paintStat(el, stat);
+                  return () => {
+                    statElsRef.current.delete(key);
+                  };
+                }}
+              />
             </div>
           ))}
         </div>
@@ -212,10 +299,10 @@ export default function GamePlayer({ game }: { game: Game }) {
                 gameId={game.id}
                 label={`Juego ${game.title}`}
                 skin={entry.skins ? skin : undefined}
-                onScore={setScore}
+                onScore={writeScore}
                 onLives={setLives}
                 onLevel={setEngineLevel}
-                onStats={setStats}
+                onStats={handleStats}
                 onGameOver={handleGameOver}
                 onPauseKey={() => setPaused((p) => !p)}
               />
@@ -329,7 +416,7 @@ export default function GamePlayer({ game }: { game: Game }) {
           <div className="modal">
             <h2>FIN DEL JUEGO</h2>
             <div className="final-label">PUNTUACIÓN FINAL</div>
-            <div className="final">{score.toLocaleString("es-ES")}</div>
+            <div className="final">{finalScore.toLocaleString("es-ES")}</div>
             {!saved ? (
               <div className={"input-row" + (ranked ? " solo" : "")}>
                 {!ranked && (

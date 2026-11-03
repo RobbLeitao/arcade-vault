@@ -1352,6 +1352,14 @@ a { color: inherit; text-decoration: none; }
   margin-inline: auto;
 }
 
+/* Juegos con motor (SPEC 12): scanlines sin mezcla. Negro con alfa a da
+   destino × (1 − a) tanto en multiply como en normal, así que se ve igual,
+   y el navegador deja de recomponer la mezcla en cada frame del canvas. */
+.crt-fit .crt-screen::after {
+  mix-blend-mode: normal;
+  background: repeating-linear-gradient(0deg, rgba(0,0,0,0.18) 0 2px, transparent 2px 4px);
+}
+
 /* ===== Mando táctil (SPEC 10) =====
    Panel de mandos de recreativa: teclas de dirección cuadradas con canto
    (relieve) y botones de acción redondos. Solo se monta con pointer coarse. */
