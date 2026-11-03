@@ -17,11 +17,54 @@ import {
 import type { CreateGameOptions, GameCallbacks, GameEngine } from "../contract";
 import { DEFAULT_SKIN, type SkinId } from "../skins";
 import { PALETTES } from "./skins";
+import { createSpriteSet } from "./sprites";
 
 type State = "playing" | "dead" | "gameover";
 
 const START_LIVES = 3;
 const CONTROL_KEYS = ["ArrowLeft", "ArrowRight", "ArrowUp", "Space"];
+
+// Bucle de paso fijo (SPEC 12): la simulación avanza siempre en pasos de STEP,
+// igual a 60, 120 o 144 Hz. MAX_FRAME acota lo simulado por frame: por debajo
+// de 10 fps el juego va a cámara lenta en vez de dar saltos.
+const STEP = 1 / 240; // s de simulación por paso
+const MAX_FRAME = 0.1; // s máximos simulados por frame
+
+/** Quita en el sitio los elementos muertos, conservando el orden. */
+function compact<T extends { dead: boolean }>(list: T[]) {
+  let n = 0;
+  for (const item of list) if (!item.dead) list[n++] = item;
+  list.length = n;
+}
+
+/** Scanlines y viñeta del skin en un canvas propio; null si no tiene. */
+function paintEffects(palette: Palette): HTMLCanvasElement | null {
+  if (palette.scanlines <= 0 && palette.vignette <= 0) return null;
+  const layer = document.createElement("canvas");
+  layer.width = W;
+  layer.height = H;
+  const c = layer.getContext("2d");
+  if (!c) return null;
+  if (palette.scanlines > 0) {
+    c.fillStyle = `rgba(0, 0, 0, ${palette.scanlines})`;
+    for (let y = 0; y < H; y += 3) c.fillRect(0, y, W, 1);
+  }
+  if (palette.vignette > 0) {
+    const vignette = c.createRadialGradient(
+      W / 2,
+      H / 2,
+      H * 0.45,
+      W / 2,
+      H / 2,
+      W * 0.65,
+    );
+    vignette.addColorStop(0, "rgba(0, 0, 0, 0)");
+    vignette.addColorStop(1, `rgba(0, 0, 0, ${palette.vignette})`);
+    c.fillStyle = vignette;
+    c.fillRect(0, 0, W, H);
+  }
+  return layer;
+}
 
 function isTextField(target: EventTarget | null) {
   return (
@@ -49,25 +92,19 @@ export function createAsteroids(
     };
   }
 
+  // ── Capas cacheadas (SPEC 12) ───────────────────────────────────────────────
+  // Glow de cada forma, pintado al primer uso.
+  const sprites = createSpriteSet();
+  // Scanlines + viñeta del skin, pintadas una vez; null si el skin no tiene.
+  let effects: HTMLCanvasElement | null = null;
+
   // ── Skin (paleta y efectos de pantalla) ─────────────────────────────────────
   let palette: Palette;
-  let vignette: CanvasGradient | null = null;
 
   function applyPalette(skin: SkinId) {
     palette = PALETTES[skin]();
-    vignette = null;
-    if (palette.vignette > 0) {
-      vignette = ctx!.createRadialGradient(
-        W / 2,
-        H / 2,
-        H * 0.45,
-        W / 2,
-        H / 2,
-        W * 0.65,
-      );
-      vignette.addColorStop(0, "rgba(0, 0, 0, 0)");
-      vignette.addColorStop(1, `rgba(0, 0, 0, ${palette.vignette})`);
-    }
+    sprites.clear();
+    effects = paintEffects(palette);
   }
   applyPalette(options?.skin ?? DEFAULT_SKIN);
 
@@ -90,6 +127,8 @@ export function createAsteroids(
   let destroyed = false;
   let raf: number | null = null;
   let lastTime: number | null = null;
+  let acc = 0; // s pendientes de simular
+  const newAsteroids: Asteroid[] = []; // fragmentos de cada paso (reutilizado)
 
   // ── Callbacks (solo al cambiar el valor) ────────────────────────────────────
   let sentScore = NaN;
@@ -224,8 +263,8 @@ export function createAsteroids(
   }
 
   function updateParticles(dt: number) {
-    particles.forEach((p) => p.update(dt));
-    particles = particles.filter((p) => !p.dead);
+    for (const p of particles) p.update(dt);
+    compact(particles);
   }
 
   function update(dt: number) {
@@ -237,7 +276,7 @@ export function createAsteroids(
     if (state === "dead") {
       deadTimer -= dt;
       updateParticles(dt);
-      asteroids.forEach((a) => a.update(dt));
+      for (const a of asteroids) a.update(dt);
       if (deadTimer <= 0) {
         state = "playing";
         ship.reset();
@@ -251,14 +290,14 @@ export function createAsteroids(
     }
 
     ship.update(dt, keys);
-    bullets.forEach((b) => b.update(dt));
-    asteroids.forEach((a) => a.update(dt));
-    particles.forEach((p) => p.update(dt));
-    powerUps.forEach((p) => p.update(dt));
+    for (const b of bullets) b.update(dt);
+    for (const a of asteroids) a.update(dt);
+    for (const p of particles) p.update(dt);
+    for (const p of powerUps) p.update(dt);
 
-    bullets = bullets.filter((b) => !b.dead);
-    particles = particles.filter((p) => !p.dead);
-    powerUps = powerUps.filter((p) => !p.dead);
+    compact(bullets);
+    compact(particles);
+    compact(powerUps);
 
     for (const p of powerUps) {
       if (!p.dead && dist(ship, p) < ship.radius + p.radius) {
@@ -268,7 +307,7 @@ export function createAsteroids(
     }
 
     // Bala vs asteroide
-    const newAsteroids: Asteroid[] = [];
+    newAsteroids.length = 0;
     for (const b of bullets) {
       for (const a of asteroids) {
         if (!a.dead && !b.dead && dist(b, a) < a.radius) {
@@ -288,8 +327,10 @@ export function createAsteroids(
         }
       }
     }
-    asteroids = asteroids.filter((a) => !a.dead).concat(newAsteroids);
-    bullets = bullets.filter((b) => !b.dead);
+    compact(asteroids);
+    for (const a of newAsteroids) asteroids.push(a);
+    newAsteroids.length = 0;
+    compact(bullets);
 
     // Nave vs asteroide
     if (ship.invincible <= 0) {
@@ -303,8 +344,6 @@ export function createAsteroids(
 
     // Nivel completado
     if (asteroids.length === 0) nextLevel();
-
-    emit();
   }
 
   function draw() {
@@ -315,32 +354,27 @@ export function createAsteroids(
     } else {
       c.clearRect(0, 0, W, H);
     }
-    particles.forEach((p) => p.draw(c, palette));
-    asteroids.forEach((a) => a.draw(c, palette));
-    powerUps.forEach((p) => p.draw(c, palette));
-    bullets.forEach((b) => b.draw(c, palette));
-    ship.draw(c, palette);
-    drawScreenEffects(c);
-  }
-
-  // Efectos de pantalla del skin (scanlines y viñeta), estáticos: sin parpadeo.
-  function drawScreenEffects(c: CanvasRenderingContext2D) {
-    if (palette.scanlines > 0) {
-      c.fillStyle = `rgba(0, 0, 0, ${palette.scanlines})`;
-      for (let y = 0; y < H; y += 3) c.fillRect(0, y, W, 1);
-    }
-    if (vignette) {
-      c.fillStyle = vignette;
-      c.fillRect(0, 0, W, H);
-    }
+    for (const p of particles) p.draw(c, palette, sprites);
+    for (const a of asteroids) a.draw(c, palette, sprites);
+    for (const p of powerUps) p.draw(c, palette, sprites);
+    for (const b of bullets) b.draw(c, palette, sprites);
+    ship.draw(c, palette, sprites);
+    // Efectos de pantalla del skin, estáticos: sin parpadeo.
+    if (effects) c.drawImage(effects, 0, 0);
   }
 
   // ── Bucle ───────────────────────────────────────────────────────────────────
   function loop(ts: number) {
     raf = null;
-    const dt = lastTime === null ? 0 : Math.min((ts - lastTime) / 1000, 0.05);
+    const elapsed = lastTime === null ? 0 : (ts - lastTime) / 1000;
     lastTime = ts;
-    update(dt);
+    acc += Math.min(elapsed, MAX_FRAME);
+    // Tras el fin solo se siguen animando las partículas (update lo acota).
+    while (acc >= STEP) {
+      update(STEP);
+      acc -= STEP;
+    }
+    emit();
     draw();
     // Tras el fin de la partida el bucle se detiene cuando se apagan las partículas.
     if (state === "gameover" && particles.length === 0) return;
@@ -350,6 +384,7 @@ export function createAsteroids(
   function startLoop() {
     if (raf !== null || destroyed) return;
     lastTime = null;
+    acc = 0;
     raf = requestAnimationFrame(loop);
   }
 

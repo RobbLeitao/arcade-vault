@@ -11,7 +11,6 @@ import {
   collide,
   createBoard,
   drawBlock,
-  drawGhostBlock,
   rotateCW,
   type Board,
   type Palette,
@@ -20,11 +19,16 @@ import {
 import type { CreateGameOptions, GameCallbacks, GameEngine } from "../contract";
 import { DEFAULT_SKIN, type SkinId } from "../skins";
 import { PALETTES } from "./skins";
+import { BLOCK_KEYS, GHOST_KEYS, createSpriteSet } from "./sprites";
 
 const START_INTERVAL = 1000;
 const MIN_INTERVAL = 100;
 const INTERVAL_STEP = 90;
-const MAX_DT = 50; // ms; evita soltar varias filas de golpe tras una pausa
+// Bucle de paso fijo (SPEC 12): la simulación avanza en pasos de 1/240 s y
+// como mucho 0,1 s por frame (por debajo de 10 fps, cámara lenta).
+const STEP = 1000 / 240; // ms de simulación por paso
+const MAX_FRAME = 100; // ms máximos simulados por frame
+const EPS = 1e-6; // tolerancia al sumar pasos (240 pasos = 1000 ms exactos)
 const ARROW_KEYS = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"];
 
 function isTextField(target: EventTarget | null) {
@@ -34,6 +38,42 @@ function isTextField(target: EventTarget | null) {
       target.tagName === "TEXTAREA" ||
       target.isContentEditable)
   );
+}
+
+/** Canvas fuera de pantalla del tamaño lógico del juego. */
+function createLayer() {
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = H;
+  return { canvas, ctx: canvas.getContext("2d")! };
+}
+
+// Efectos de pantalla del skin (scanlines y viñeta), estáticos: sin parpadeo.
+function renderEffects(palette: Palette): HTMLCanvasElement | null {
+  if (palette.scanlines <= 0 && palette.vignette <= 0) return null;
+  const { canvas, ctx } = createLayer();
+  if (palette.scanlines > 0) {
+    ctx.fillStyle = `rgba(0, 0, 0, ${palette.scanlines})`;
+    for (let y = 0; y < H; y += 3) ctx.fillRect(0, y, W, 1);
+  }
+  if (palette.vignette > 0) {
+    // Canvas estrecho (420×600): radios según la diagonal para que la viñeta
+    // solo oscurezca las esquinas, con transición suave.
+    const corner = Math.hypot(W / 2, H / 2);
+    const vignette = ctx.createRadialGradient(
+      W / 2,
+      H / 2,
+      corner * 0.6,
+      W / 2,
+      H / 2,
+      corner,
+    );
+    vignette.addColorStop(0, "rgba(0, 0, 0, 0)");
+    vignette.addColorStop(1, `rgba(0, 0, 0, ${palette.vignette})`);
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, W, H);
+  }
+  return canvas;
 }
 
 function randomPiece(): Piece {
@@ -66,26 +106,23 @@ export function createCaida(
 
   // ── Skin (paleta y efectos de pantalla) ─────────────────────────────────────
   let palette: Palette;
-  let vignette: CanvasGradient | null = null;
+  const sprites = createSpriteSet(); // bloques de la pieza y de la fantasma
+
+  // Capas cacheadas (SPEC 12). `boardLayer`: fondo, cuadrícula y bloques
+  // fijados; `panelLayer`: separador y vista previa de la siguiente pieza. Se
+  // rehacen solo al fijar una pieza, al empezar y al cambiar de skin.
+  const boardLayer = createLayer();
+  const panelLayer = createLayer();
+  let boardDirty = true;
+  // Scanlines y viñeta del skin, pintadas una vez al aplicar la paleta (null si
+  // el skin no tiene efectos).
+  let effects: HTMLCanvasElement | null = null;
 
   function applyPalette(skin: SkinId) {
     palette = PALETTES[skin]();
-    vignette = null;
-    if (palette.vignette > 0) {
-      // Canvas estrecho (420×600): radios según la diagonal para que la viñeta
-      // solo oscurezca las esquinas, con transición suave.
-      const corner = Math.hypot(W / 2, H / 2);
-      vignette = ctx!.createRadialGradient(
-        W / 2,
-        H / 2,
-        corner * 0.6,
-        W / 2,
-        H / 2,
-        corner,
-      );
-      vignette.addColorStop(0, "rgba(0, 0, 0, 0)");
-      vignette.addColorStop(1, `rgba(0, 0, 0, ${palette.vignette})`);
-    }
+    sprites.clear();
+    boardDirty = true;
+    effects = renderEffects(palette);
   }
   applyPalette(options?.skin ?? DEFAULT_SKIN);
 
@@ -104,6 +141,7 @@ export function createCaida(
   let destroyed = false;
   let raf: number | null = null;
   let lastTime: number | null = null;
+  let acc = 0; // ms pendientes de simular
 
   // ── Callbacks (solo al cambiar el valor) ────────────────────────────────────
   let sentScore = NaN;
@@ -177,6 +215,7 @@ export function createCaida(
     merge();
     clearLines();
     spawn();
+    boardDirty = true; // cambian los bloques fijados y la siguiente pieza
   }
 
   function hardDrop() {
@@ -213,6 +252,7 @@ export function createCaida(
     dropAccum = 0;
     next = randomPiece();
     spawn();
+    boardDirty = true;
     sentScore = sentLevel = sentLines = NaN;
     callbacks.onLives(null);
     emit();
@@ -263,105 +303,124 @@ export function createCaida(
   window.addEventListener("keydown", onKeyDown);
 
   // ── Dibujo ──────────────────────────────────────────────────────────────────
-  function drawGrid() {
-    ctx!.strokeStyle = palette.grid;
-    ctx!.lineWidth = 1;
-    ctx!.beginPath();
+  function drawGrid(g: CanvasRenderingContext2D) {
+    g.strokeStyle = palette.grid;
+    g.lineWidth = 1;
+    g.beginPath();
     for (let c = 0; c <= COLS; c++) {
-      ctx!.moveTo(c * BLOCK + 0.5, 0);
-      ctx!.lineTo(c * BLOCK + 0.5, ROWS * BLOCK);
+      g.moveTo(c * BLOCK + 0.5, 0);
+      g.lineTo(c * BLOCK + 0.5, ROWS * BLOCK);
     }
     for (let r = 0; r <= ROWS; r++) {
-      ctx!.moveTo(0, r * BLOCK + 0.5);
-      ctx!.lineTo(BOARD_W, r * BLOCK + 0.5);
+      g.moveTo(0, r * BLOCK + 0.5);
+      g.lineTo(BOARD_W, r * BLOCK + 0.5);
     }
-    ctx!.stroke();
+    g.stroke();
   }
 
-  function drawPiece(piece: Piece, y: number) {
+  // Pieza en juego y fantasma: bloques cacheados (sin shadowBlur por frame).
+  function drawPieceSprites(piece: Piece, y: number, keys: string[]) {
     for (let r = 0; r < piece.shape.length; r++)
-      for (let c = 0; c < piece.shape[r].length; c++)
-        if (piece.shape[r][c])
-          drawBlock(ctx!, palette, piece.x + c, y + r, piece.shape[r][c]);
+      for (let c = 0; c < piece.shape[r].length; c++) {
+        const v = piece.shape[r][c];
+        if (!v || !palette.colors[v]) continue;
+        const sprite = sprites.get(keys[v], palette);
+        ctx!.drawImage(
+          sprite.canvas,
+          (piece.x + c) * BLOCK - sprite.ox,
+          (y + r) * BLOCK - sprite.oy,
+        );
+      }
   }
 
-  function drawGhost(piece: Piece, y: number) {
-    for (let r = 0; r < piece.shape.length; r++)
-      for (let c = 0; c < piece.shape[r].length; c++)
-        if (piece.shape[r][c])
-          drawGhostBlock(ctx!, palette, piece.x + c, y + r, piece.shape[r][c]);
-  }
-
-  function drawNext() {
-    const shape = next.shape;
-    // Etiqueta y vista previa centradas en el panel de 120 px.
-    ctx!.save();
+  // Etiqueta centrada en el panel de 120 px. Se pinta en el canvas visible en
+  // cada frame (un solo fillText): rasterizado en una capa fuera de pantalla,
+  // el antialiasing del texto sale distinto. No se solapa con la vista previa.
+  function drawLabel() {
     ctx!.fillStyle = palette.label;
     ctx!.font = "11px ui-monospace, Consolas, monospace";
     ctx!.textAlign = "center";
     ctx!.textBaseline = "middle";
     ctx!.fillText("SIGUIENTE", BOARD_W + (W - BOARD_W) / 2, 28);
-    ctx!.translate(BOARD_W, 48);
+  }
+
+  // Vista previa de la siguiente pieza, centrada en el panel.
+  function drawNext(g: CanvasRenderingContext2D) {
+    const shape = next.shape;
+    g.save();
+    g.translate(BOARD_W, 48);
     const offX = (4 - shape[0].length) / 2;
     const offY = (4 - shape.length) / 2;
     for (let r = 0; r < shape.length; r++)
       for (let c = 0; c < shape[r].length; c++)
-        drawBlock(ctx!, palette, offX + c, offY + r, shape[r][c]);
-    ctx!.restore();
+        drawBlock(g, palette, offX + c, offY + r, shape[r][c]);
+    g.restore();
+  }
+
+  // Rehace las capas cacheadas con el mismo orden de dibujo de siempre: fondo,
+  // cuadrícula y bloques fijados debajo de la pieza; separador y vista previa
+  // encima.
+  function renderLayers() {
+    boardDirty = false;
+    const b = boardLayer.ctx;
+    b.clearRect(0, 0, W, H);
+    if (palette.background) {
+      b.fillStyle = palette.background;
+      b.fillRect(0, 0, W, H);
+    }
+    drawGrid(b);
+    for (let r = 0; r < ROWS; r++)
+      for (let c = 0; c < COLS; c++) drawBlock(b, palette, c, r, board[r][c]);
+
+    const p = panelLayer.ctx;
+    p.clearRect(0, 0, W, H);
+    // Separador entre tablero y panel lateral
+    p.strokeStyle = palette.separator;
+    p.lineWidth = 1;
+    p.beginPath();
+    p.moveTo(BOARD_W + 0.5, 0);
+    p.lineTo(BOARD_W + 0.5, H);
+    p.stroke();
+    drawNext(p);
   }
 
   function draw() {
+    if (boardDirty) renderLayers();
     ctx!.clearRect(0, 0, W, H);
-    if (palette.background) {
-      ctx!.fillStyle = palette.background;
-      ctx!.fillRect(0, 0, W, H);
-    }
-    drawGrid();
-
-    for (let r = 0; r < ROWS; r++)
-      for (let c = 0; c < COLS; c++)
-        drawBlock(ctx!, palette, c, r, board[r][c]);
-
-    drawGhost(current, ghostY());
-    drawPiece(current, current.y);
-
-    // Separador entre tablero y panel lateral
-    ctx!.strokeStyle = palette.separator;
-    ctx!.lineWidth = 1;
-    ctx!.beginPath();
-    ctx!.moveTo(BOARD_W + 0.5, 0);
-    ctx!.lineTo(BOARD_W + 0.5, H);
-    ctx!.stroke();
-
-    drawNext();
-    drawScreenEffects();
-  }
-
-  // Efectos de pantalla del skin (scanlines y viñeta), estáticos: sin parpadeo.
-  function drawScreenEffects() {
-    if (palette.scanlines > 0) {
-      ctx!.fillStyle = `rgba(0, 0, 0, ${palette.scanlines})`;
-      for (let y = 0; y < H; y += 3) ctx!.fillRect(0, y, W, 1);
-    }
-    if (vignette) {
-      ctx!.fillStyle = vignette;
-      ctx!.fillRect(0, 0, W, H);
-    }
+    ctx!.drawImage(boardLayer.canvas, 0, 0);
+    drawPieceSprites(current, ghostY(), GHOST_KEYS);
+    drawPieceSprites(current, current.y, BLOCK_KEYS);
+    ctx!.drawImage(panelLayer.canvas, 0, 0);
+    drawLabel();
+    if (effects) ctx!.drawImage(effects, 0, 0);
   }
 
   // ── Bucle ───────────────────────────────────────────────────────────────────
+  // Un paso de gravedad: el temporizador de caída avanza STEP ms. Como mucho
+  // una fila por frame, igual que antes con MAX_DT: un frame largo no suelta
+  // varias filas de golpe.
+  function update(canDrop: boolean): boolean {
+    dropAccum += STEP;
+    if (!canDrop || dropAccum + EPS < dropInterval) return false;
+    dropAccum = 0;
+    if (!collide(board, current.shape, current.x, current.y + 1)) {
+      current.y++;
+    } else {
+      lockPiece();
+    }
+    return true;
+  }
+
   function loop(ts: number) {
     raf = null;
-    const dt = lastTime === null ? 0 : Math.min(ts - lastTime, MAX_DT);
+    const elapsed = lastTime === null ? 0 : Math.max(0, ts - lastTime);
     lastTime = ts;
-    dropAccum += dt;
-    if (dropAccum >= dropInterval) {
-      dropAccum = 0;
-      if (!collide(board, current.shape, current.x, current.y + 1)) {
-        current.y++;
-      } else {
-        lockPiece();
-      }
+    acc += Math.min(elapsed, MAX_FRAME);
+    let dropped = false;
+    while (acc >= STEP) {
+      acc -= STEP;
+      if (update(!dropped)) dropped = true;
+      if (finished) break;
     }
     emit();
     draw();
@@ -372,6 +431,7 @@ export function createCaida(
   function startLoop() {
     if (raf !== null || destroyed || finished) return;
     lastTime = null;
+    acc = 0;
     raf = requestAnimationFrame(loop);
   }
 

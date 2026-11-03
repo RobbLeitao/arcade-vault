@@ -15,6 +15,12 @@ export const EXPLOSION_DURATION = 150; // ms
 export const EXPLOSION_STEPS = 4;
 export const POINTS_PER_BLOCK = 10;
 export const START_LIVES = 3;
+// shadowBlur base de cada forma (se multiplica por palette.glow).
+export const BLOCK_GLOW = 6;
+export const PADDLE_GLOW = 12;
+export const BALL_GLOW = 10;
+export const EXPLOSION_GLOW = 14;
+export const EXPLOSION_MAX_GROW = 12; // px por lado en el último paso
 
 export interface Rect {
   x: number;
@@ -73,7 +79,7 @@ export function drawBlock(
   const h = block.h - 4;
   ctx.save();
   ctx.shadowColor = color;
-  ctx.shadowBlur = 6 * palette.glow;
+  ctx.shadowBlur = BLOCK_GLOW * palette.glow;
   ctx.fillStyle = color;
   ctx.fillRect(x, y, w, h);
   ctx.shadowBlur = 0;
@@ -102,7 +108,7 @@ export function drawPaddle(
 ) {
   ctx.save();
   ctx.shadowColor = palette.paddle;
-  ctx.shadowBlur = 12 * palette.glow;
+  ctx.shadowBlur = PADDLE_GLOW * palette.glow;
   ctx.fillStyle = palette.paddle;
   ctx.fillRect(paddle.x, paddle.y, paddle.w, paddle.h);
   ctx.shadowBlur = 0;
@@ -125,10 +131,18 @@ export function drawBall(
 ) {
   ctx.save();
   ctx.shadowColor = palette.ball;
-  ctx.shadowBlur = 10 * palette.glow;
+  ctx.shadowBlur = BALL_GLOW * palette.glow;
   ctx.fillStyle = palette.ball;
   ctx.fillRect(ball.x, ball.y, ball.w, ball.h);
   ctx.restore();
+}
+
+// Paso (0..EXPLOSION_STEPS-1) del destello según su tiempo transcurrido.
+export function explosionStep(elapsed: number): number {
+  return Math.min(
+    Math.floor((elapsed / EXPLOSION_DURATION) * EXPLOSION_STEPS),
+    EXPLOSION_STEPS - 1,
+  );
 }
 
 // Destello del color del bloque que crece y se desvanece en 4 pasos.
@@ -137,17 +151,14 @@ export function drawExplosion(
   exp: Explosion,
   palette: Palette,
 ) {
-  const step = Math.min(
-    Math.floor((exp.elapsed / EXPLOSION_DURATION) * EXPLOSION_STEPS),
-    EXPLOSION_STEPS - 1,
-  );
+  const step = explosionStep(exp.elapsed);
   const t = (step + 1) / EXPLOSION_STEPS; // 0.25 .. 1
   const grow = 2 + t * 10;
   const color = palette.blocks[exp.color];
   ctx.save();
   ctx.globalAlpha = 1 - t * 0.8;
   ctx.shadowColor = color;
-  ctx.shadowBlur = 14 * palette.glow;
+  ctx.shadowBlur = EXPLOSION_GLOW * palette.glow;
   ctx.fillStyle = color;
   ctx.fillRect(exp.x - grow, exp.y - grow, exp.w + grow * 2, exp.h + grow * 2);
   ctx.restore();

@@ -12,10 +12,7 @@ import {
   START_LIVES,
   W,
   collideAABB,
-  drawBall,
-  drawBlock,
-  drawExplosion,
-  drawPaddle,
+  explosionStep,
   type Ball,
   type Block,
   type Explosion,
@@ -26,9 +23,55 @@ import { LEVELS } from "./levels";
 import type { CreateGameOptions, GameCallbacks, GameEngine } from "../contract";
 import { DEFAULT_SKIN, type SkinId } from "../skins";
 import { PALETTES } from "./skins";
+import {
+  BLOCK_KEYS,
+  EXPLOSION_KEYS,
+  PADDLE_SUBPX,
+  createSpriteSet,
+} from "./sprites";
 
-const MAX_DT = 50; // ms; evita atravesar bloques y soltar la pelota tras una pausa
+// Bucle de paso fijo (SPEC 12): la simulación avanza siempre en pasos de STEP,
+// igual a 60, 120 o 144 Hz. MAX_FRAME acota lo simulado por frame: por debajo
+// de 10 fps el juego va a cámara lenta en vez de atravesar bloques o la paleta.
+const STEP = 1 / 240; // s de simulación por paso
+const STEP_MS = STEP * 1000; // update() trabaja en ms
+const MAX_FRAME = 0.1; // s máximos simulados por frame
 const LAST_LEVEL = LEVELS.length;
+
+function createLayer(): HTMLCanvasElement {
+  const layer = document.createElement("canvas");
+  layer.width = W;
+  layer.height = H;
+  return layer;
+}
+
+// Efectos de pantalla del skin (scanlines y viñeta), estáticos: se pintan una
+// vez por skin en su propia capa. null si el skin no tiene efectos.
+function paintEffects(palette: Palette): HTMLCanvasElement | null {
+  if (palette.scanlines <= 0 && palette.vignette <= 0) return null;
+  const layer = createLayer();
+  const c = layer.getContext("2d");
+  if (!c) return null;
+  if (palette.scanlines > 0) {
+    c.fillStyle = `rgba(0, 0, 0, ${palette.scanlines})`;
+    for (let y = 0; y < H; y += 3) c.fillRect(0, y, W, 1);
+  }
+  if (palette.vignette > 0) {
+    const vignette = c.createRadialGradient(
+      W / 2,
+      H / 2,
+      H * 0.45,
+      W / 2,
+      H / 2,
+      W * 0.65,
+    );
+    vignette.addColorStop(0, "rgba(0, 0, 0, 0)");
+    vignette.addColorStop(1, `rgba(0, 0, 0, ${palette.vignette})`);
+    c.fillStyle = vignette;
+    c.fillRect(0, 0, W, H);
+  }
+  return layer;
+}
 
 function isTextField(target: EventTarget | null) {
   return (
@@ -57,25 +100,24 @@ export function createBloqueBuster(
     };
   }
 
+  // ── Capas cacheadas (SPEC 12) ───────────────────────────────────────────────
+  // Fondo + ladrillos vivos: solo se repinta al romper un ladrillo, al cargar un
+  // nivel o al cambiar el skin.
+  const board = createLayer();
+  let boardDirty = true;
+  // Scanlines + viñeta del skin, pintadas una vez; null si el skin no tiene.
+  let effects: HTMLCanvasElement | null = null;
+  // Formas con su glow (ladrillos, destellos, paleta y pelota), al primer uso.
+  const sprites = createSpriteSet();
+
   // ── Skin (paleta y efectos de pantalla) ─────────────────────────────────────
   let palette: Palette;
-  let vignette: CanvasGradient | null = null;
 
   function applyPalette(skin: SkinId) {
     palette = PALETTES[skin]();
-    vignette = null;
-    if (palette.vignette > 0) {
-      vignette = ctx!.createRadialGradient(
-        W / 2,
-        H / 2,
-        H * 0.45,
-        W / 2,
-        H / 2,
-        W * 0.65,
-      );
-      vignette.addColorStop(0, "rgba(0, 0, 0, 0)");
-      vignette.addColorStop(1, `rgba(0, 0, 0, ${palette.vignette})`);
-    }
+    sprites.clear();
+    boardDirty = true;
+    effects = paintEffects(palette);
   }
   applyPalette(options?.skin ?? DEFAULT_SKIN);
 
@@ -104,6 +146,12 @@ export function createBloqueBuster(
   let destroyed = false;
   let raf: number | null = null;
   let lastTime: number | null = null;
+  let acc = 0; // s pendientes de simular
+  const paddleKeys = Array.from(
+    { length: PADDLE_SUBPX },
+    (_, q) => `paddle:${paddle.w}:${paddle.h}:${q}`,
+  );
+  const ballKey = `ball:${ball.w}:${ball.h}`;
 
   // ── Callbacks (solo al cambiar el valor) ────────────────────────────────────
   let sentScore = NaN;
@@ -137,6 +185,7 @@ export function createBloqueBuster(
       alive: true,
     }));
     explosions = [];
+    boardDirty = true;
     placeBall();
   }
 
@@ -206,10 +255,11 @@ export function createBloqueBuster(
       play(bounceSound);
     }
 
-    // Bloques: uno por fotograma y siempre se invierte vy
+    // Bloques: uno por paso y siempre se invierte vy
     for (const block of blocks) {
       if (!block.alive || !collideAABB(ball, block)) continue;
       block.alive = false;
+      boardDirty = true;
       explosions.push({
         x: block.x,
         y: block.y,
@@ -232,8 +282,13 @@ export function createBloqueBuster(
       break;
     }
 
-    for (const exp of explosions) exp.elapsed += dt;
-    explosions = explosions.filter((exp) => exp.elapsed < EXPLOSION_DURATION);
+    // Destellos: avanzan y se descartan en el sitio, sin crear arrays por paso.
+    let kept = 0;
+    for (const exp of explosions) {
+      exp.elapsed += dt;
+      if (exp.elapsed < EXPLOSION_DURATION) explosions[kept++] = exp;
+    }
+    explosions.length = kept;
 
     // Pelota perdida
     if (ball.y > H) {
@@ -270,49 +325,77 @@ export function createBloqueBuster(
   window.addEventListener("keyup", onKeyUp);
 
   // ── Dibujo ──────────────────────────────────────────────────────────────────
-  function draw() {
+  function paintBoard() {
+    const b = board.getContext("2d");
+    if (!b) return;
+    b.clearRect(0, 0, W, H);
     if (palette.background) {
-      ctx!.fillStyle = palette.background;
-      ctx!.fillRect(0, 0, W, H);
-    } else {
-      ctx!.clearRect(0, 0, W, H);
+      b.fillStyle = palette.background;
+      b.fillRect(0, 0, W, H);
     }
+    // Mismo orden que antes: el glow de cada ladrillo cae sobre los anteriores.
     for (const block of blocks) {
-      if (block.alive) drawBlock(ctx!, block, palette);
+      if (!block.alive) continue;
+      const s = sprites.get(BLOCK_KEYS[block.color], palette);
+      b.drawImage(s.canvas, block.x - s.ox, block.y - s.oy);
     }
-    for (const exp of explosions) drawExplosion(ctx!, exp, palette);
-    drawPaddle(ctx!, paddle, palette);
-    drawBall(ctx!, ball, palette);
-    drawScreenEffects(ctx!);
   }
 
-  // Efectos de pantalla del skin (scanlines y viñeta), estáticos: sin parpadeo.
-  function drawScreenEffects(c: CanvasRenderingContext2D) {
-    if (palette.scanlines > 0) {
-      c.fillStyle = `rgba(0, 0, 0, ${palette.scanlines})`;
-      for (let y = 0; y < H; y += 3) c.fillRect(0, y, W, 1);
+  function draw() {
+    const c = ctx!;
+    if (boardDirty) {
+      paintBoard();
+      boardDirty = false;
     }
-    if (vignette) {
-      c.fillStyle = vignette;
-      c.fillRect(0, 0, W, H);
+    // Con fondo opaco la capa cubre todo el canvas; sin él (NEÓN) hay que limpiar.
+    if (!palette.background) c.clearRect(0, 0, W, H);
+    c.drawImage(board, 0, 0);
+    // Los destellos parten de la esquina del bloque, siempre entera.
+    for (const exp of explosions) {
+      const s = sprites.get(
+        EXPLOSION_KEYS[exp.color][explosionStep(exp.elapsed)],
+        palette,
+      );
+      c.drawImage(s.canvas, exp.x - s.ox, exp.y - s.oy);
     }
+    // Paleta: sprite ya desplazado a su fracción de x (ver PADDLE_SUBPX), copiado
+    // en un píxel entero. Conserva el antialias exacto de su posición con
+    // decimales, como cuando se pintaba con fillRect.
+    let px = Math.floor(paddle.x);
+    let q = Math.round((paddle.x - px) * PADDLE_SUBPX);
+    if (q === PADDLE_SUBPX) {
+      px++;
+      q = 0;
+    }
+    const p = sprites.get(paddleKeys[q], palette);
+    c.drawImage(p.canvas, px - p.ox, paddle.y - p.oy);
+    // Pelota sin redondear: el filtrado de drawImage aproxima su antialias.
+    const s = sprites.get(ballKey, palette);
+    c.drawImage(s.canvas, ball.x - s.ox, ball.y - s.oy);
+    // Efectos de pantalla del skin, estáticos: sin parpadeo.
+    if (effects) c.drawImage(effects, 0, 0);
   }
 
   // ── Bucle ───────────────────────────────────────────────────────────────────
   function loop(ts: number) {
     raf = null;
-    const dt = lastTime === null ? 0 : Math.min(ts - lastTime, MAX_DT);
+    const elapsed = lastTime === null ? 0 : (ts - lastTime) / 1000;
     lastTime = ts;
-    update(dt);
+    acc += Math.min(elapsed, MAX_FRAME);
+    while (acc >= STEP) {
+      update(STEP_MS);
+      acc -= STEP;
+      if (finished) return; // finish() ya dibujó el último frame
+    }
     emit();
     draw();
-    if (finished) return;
     raf = requestAnimationFrame(loop);
   }
 
   function startLoop() {
     if (raf !== null || destroyed || finished) return;
     lastTime = null;
+    acc = 0;
     raf = requestAnimationFrame(loop);
   }
 
