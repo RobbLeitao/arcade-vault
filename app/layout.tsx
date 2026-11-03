@@ -1,5 +1,9 @@
-import type { Metadata } from "next";
-import { Press_Start_2P, JetBrains_Mono, Courier_Prime } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import {
+  Press_Start_2P,
+  JetBrains_Mono,
+  Courier_Prime,
+} from "next/font/google";
 import Footer from "@/components/footer";
 import Nav from "@/components/nav";
 import { SessionProvider } from "@/lib/session";
@@ -26,6 +30,22 @@ const courierPrime = Courier_Prime({
 export const metadata: Metadata = {
   title: "Arcade Vault",
   description: "Juega online y compite por el puntaje más alto.",
+  applicationName: "Arcade Vault",
+  appleWebApp: {
+    capable: true,
+    title: "Arcade Vault",
+    statusBarStyle: "black-translucent",
+  },
+};
+
+// Sin maximumScale/userScalable: el zoom de la página queda libre; el bloqueo
+// de gestos vive solo en el mando táctil (SPEC 10). viewport-fit=cover +
+// env(safe-area-inset-*) en globals.css. themeColor = token --bg.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#0a0a0f",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

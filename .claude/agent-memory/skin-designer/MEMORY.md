@@ -17,4 +17,4 @@
 
 ## Criterios aprendidos
 
-- [Criterios y trampas de skins](criterios-skins.md) — luminancia/patrones RETRO, viñeta en canvas estrecho, pieza fantasma, fondo NEÓN #000, sprites, piloto, servidor dev ajeno
+- [Criterios y trampas de skins](criterios-skins.md) — luminancia/patrones RETRO, contorno sobre apoyos, viñeta, fantasma, fondo NEÓN #000, sprites, franjas de zona, dev

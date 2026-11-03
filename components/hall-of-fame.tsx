@@ -144,16 +144,7 @@ export default function HallOfFame({
                 <div className="date">{second.date}</div>
               </div>
               <div className="podium-slot gold">
-                <div
-                  className="pixel"
-                  style={{
-                    fontSize: 9,
-                    color: "var(--gold)",
-                    letterSpacing: "0.18em",
-                  }}
-                >
-                  CAMPEÓN
-                </div>
+                <div className="pixel podium-champ">CAMPEÓN</div>
                 <div
                   className="rank-num"
                   style={{ fontSize: 36, marginTop: 4 }}

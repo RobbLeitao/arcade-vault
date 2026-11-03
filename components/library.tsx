@@ -32,6 +32,10 @@ export default function Library({ games }: { games: Game[] | null }) {
         <div className="av-search">
           <span className="ico">⌕</span>
           <input
+            aria-label="Buscar un juego por nombre"
+            inputMode="search"
+            enterKeyHint="search"
+            autoComplete="off"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Buscar un juego por nombre…"

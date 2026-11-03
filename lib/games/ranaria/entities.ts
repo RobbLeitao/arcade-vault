@@ -73,9 +73,15 @@ export interface Palette {
   truck: string; // --silver
   log: string; // --bronze
   turtle: string; // --green
+  submerged: string; // contorno de la tortuga sumergida
+  submergedAlpha: number; // opacidad de ese contorno (NEÓN = 0.3)
+  submergedDash: number[]; // trazo discontinuo; [] = continuo
   frog: string; // --green
+  frogOutline: string | null; // contorno oscuro que separa la rana de su apoyo
   eye: string; // --ink
   glow: number; // multiplicador de shadowBlur (NEÓN = 1)
+  scanlines: number; // opacidad de las scanlines; 0 = sin ellas
+  vignette: number; // opacidad de la viñeta en las esquinas; 0 = sin ella
 }
 
 export function timeLimit(level: number): number {
@@ -146,6 +152,7 @@ export function buildLanes(level: number): Lane[] {
 // ── Dibujo ────────────────────────────────────────────────────────────────────
 
 const GLOW = 10; // shadowBlur base, escalado por palette.glow
+const FROG_GLOW = 18;
 
 function glow(ctx: CanvasRenderingContext2D, color: string, palette: Palette) {
   ctx.shadowColor = color;
@@ -177,6 +184,23 @@ export function drawBoard(
     W,
     (ROW_RIVER_BOT - ROW_RIVER_TOP + 1) * CELL,
   );
+
+  // Ondas tenues y estáticas: el río se lee como agua, no como un bloque plano.
+  ctx.strokeStyle = palette.eye;
+  ctx.globalAlpha = 0.07;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  for (let r = ROW_RIVER_TOP; r <= ROW_RIVER_BOT; r++) {
+    for (let i = 0; i < 6; i++) {
+      const x = ((i * 113 + r * 47) % (W - 30)) + 5;
+      const y = r * CELL + 12 + ((i * 7 + r * 5) % 18);
+      ctx.moveTo(x, y);
+      ctx.quadraticCurveTo(x + 6, y - 4, x + 12, y);
+      ctx.quadraticCurveTo(x + 18, y + 4, x + 24, y);
+    }
+  }
+  ctx.stroke();
+  ctx.globalAlpha = 1;
 
   // Zonas seguras
   ctx.fillStyle = palette.safe;
@@ -349,12 +373,14 @@ function drawTurtles(
     if (submerged) {
       // Contorno tenue: no sirve de apoyo.
       noGlow(ctx);
-      ctx.globalAlpha = 0.3;
-      ctx.strokeStyle = palette.turtle;
+      ctx.globalAlpha = palette.submergedAlpha;
+      ctx.strokeStyle = palette.submerged;
       ctx.lineWidth = 2;
+      ctx.setLineDash(palette.submergedDash);
       ctx.beginPath();
       ctx.arc(cx, cy, 13, 0, Math.PI * 2);
       ctx.stroke();
+      ctx.setLineDash([]);
       ctx.globalAlpha = 1;
       continue;
     }
@@ -412,22 +438,39 @@ function drawFrogShape(
   ctx.save();
   ctx.translate(cx, cy);
   ctx.rotate(FACING_ANGLE[facing]);
-  glow(ctx, palette.frog, palette);
+  ctx.lineCap = "round";
+  const reach = jumping ? 17 : 12;
+  const legs = () => {
+    ctx.beginPath();
+    ctx.moveTo(-8, -6);
+    ctx.lineTo(-reach, jumping ? -16 : -12);
+    ctx.moveTo(8, -6);
+    ctx.lineTo(reach, jumping ? -16 : -12);
+    ctx.moveTo(-8, 7);
+    ctx.lineTo(-reach, jumping ? 17 : 12);
+    ctx.moveTo(8, 7);
+    ctx.lineTo(reach, jumping ? 17 : 12);
+  };
+  if (palette.frogOutline) {
+    // Silueta 2,5 px más ancha detrás de la rana, sin glow.
+    noGlow(ctx);
+    ctx.strokeStyle = palette.frogOutline;
+    ctx.lineWidth = 9;
+    legs();
+    ctx.stroke();
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 12, 14, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  // La rana es lo único con brillo reforzado: se localiza de un vistazo.
+  ctx.shadowColor = palette.frog;
+  ctx.shadowBlur = FROG_GLOW * palette.glow;
   ctx.fillStyle = palette.frog;
   ctx.strokeStyle = palette.frog;
   ctx.lineWidth = 4;
-  ctx.lineCap = "round";
   // Patas: recogidas en reposo, estiradas en el salto
-  const reach = jumping ? 17 : 12;
-  ctx.beginPath();
-  ctx.moveTo(-8, -6);
-  ctx.lineTo(-reach, jumping ? -16 : -12);
-  ctx.moveTo(8, -6);
-  ctx.lineTo(reach, jumping ? -16 : -12);
-  ctx.moveTo(-8, 7);
-  ctx.lineTo(-reach, jumping ? 17 : 12);
-  ctx.moveTo(8, 7);
-  ctx.lineTo(reach, jumping ? 17 : 12);
+  legs();
   ctx.stroke();
   // Cuerpo (elipse 28×24)
   ctx.beginPath();
