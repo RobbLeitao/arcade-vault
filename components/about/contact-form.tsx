@@ -53,6 +53,7 @@ function ContactFormInner({ onReset }: { onReset: () => void }) {
             <input
               id="contact-name"
               name="name"
+              autoComplete="nickname"
               maxLength={CONTACT_LIMITS.name.max}
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -65,6 +66,7 @@ function ContactFormInner({ onReset }: { onReset: () => void }) {
               id="contact-email"
               name="email"
               type="email"
+              autoComplete="email"
               maxLength={CONTACT_LIMITS.email.max}
               value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}

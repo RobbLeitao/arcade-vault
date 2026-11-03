@@ -89,4 +89,21 @@ export const ENGINES: Record<string, EngineEntry> = {
       return m.createSerpentina;
     },
   },
+  ranaria: {
+    width: 640,
+    height: 560,
+    skins: true,
+    touch: {
+      // Cruceta: un toque = un salto; sin autorrepetición.
+      move: [
+        btn("ArrowUp", "↑", "Saltar hacia arriba"),
+        btn("ArrowLeft", "←", "Saltar a la izquierda"),
+        btn("ArrowRight", "→", "Saltar a la derecha"),
+        btn("ArrowDown", "↓", "Saltar hacia abajo"),
+      ],
+      moveShape: "cross",
+      actions: [],
+    },
+    load: () => import("./ranaria/engine").then((m) => m.createRanaria),
+  },
 };

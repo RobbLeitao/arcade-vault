@@ -89,7 +89,7 @@ export const ENGINES: Record<string, EngineEntry> = {
 8. Sonido y assets, solo si la spec los incluye (`public/games/<id>/`, precargados antes de empezar); por defecto quedan fuera de alcance.
 9. El motor no guarda puntuaciones: solo llama a `onGameOver(finalScore)`. El guardado es de `GamePlayer` + `submitScore` (SPEC 06).
 10. Skins: el motor expone los 3 skins (CLÁSICO por defecto, NEÓN, RETRO) en `lib/games/<carpeta>/skins.ts`, soporta `setSkin` y declara `skins: true`. Detalle en la sección «Skins».
-11. Táctil (SPEC 10): el motor lee `e.code` (nunca `e.key`) y la entrada de `ENGINES` declara `touch: TouchLayout` (`lib/games/touch.ts`) con los mismos controles que el teclado; `repeat: true` solo en botones que avanzan por `keydown`. El motor no escucha eventos táctiles.
+11. Táctil (SPEC 10): el motor lee `e.code` (nunca `e.key`) y la entrada de `ENGINES` declara `touch: TouchLayout` (`lib/games/touch.ts`) con los mismos controles que el teclado; `repeat: true` solo en botones que avanzan por `keydown`. El motor no escucha eventos táctiles. En vertical, `globals.css` reserva más alto cuando el mando es una cruceta (`moveShape: "cross"`, `--touch-reserve`); un canvas casi cuadrado o más alto que ancho debe verificarse también en 390×664 (viewport real de Safari en iPhone 13), no solo en 390×844.
 
 ## Skins
 

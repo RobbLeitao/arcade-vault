@@ -129,17 +129,7 @@ export default function AuthForm({
         <div className="auth-header">
           <div className="mark"></div>
           <h2 className="neon-cyan">ARCADE VAULT</h2>
-          <div
-            className="mono"
-            style={{
-              fontSize: 11,
-              color: "var(--ink-faint)",
-              letterSpacing: "0.16em",
-              marginTop: 6,
-            }}
-          >
-            ACCESO AL SISTEMA · v2.6
-          </div>
+          <div className="mono auth-sub">ACCESO AL SISTEMA · v2.6</div>
         </div>
 
         {state.status === "check-email" ? (
@@ -288,15 +278,7 @@ export default function AuthForm({
           </>
         )}
 
-        <div
-          style={{
-            marginTop: 18,
-            textAlign: "center",
-            fontSize: 11,
-            color: "var(--ink-faint)",
-            letterSpacing: "0.1em",
-          }}
-        >
+        <div className="auth-terms">
           AL ENTRAR ACEPTAS LOS TÉRMINOS DEL SALÓN ARCADE
         </div>
       </div>

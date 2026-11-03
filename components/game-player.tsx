@@ -334,6 +334,11 @@ export default function GamePlayer({ game }: { game: Game }) {
               <div className={"input-row" + (ranked ? " solo" : "")}>
                 {!ranked && (
                   <input
+                    aria-label="Tus iniciales"
+                    autoComplete="off"
+                    autoCapitalize="characters"
+                    enterKeyHint="done"
+                    maxLength={10}
                     value={name}
                     onChange={(e) =>
                       setTypedName(e.target.value.toUpperCase().slice(0, 10))

@@ -108,7 +108,10 @@ export default function Nav() {
           </div>
         ) : (
           <Link href="/acceso" className="btn auth-btn">
-            Iniciar Sesión
+            {/* En móviles estrechos (≤480px) se muestra la etiqueta corta para
+                que la nav quepa en una línea (CSS en globals.css). */}
+            <span className="auth-label-long">Iniciar Sesión</span>
+            <span className="auth-label-short">Entrar</span>
           </Link>
         )}
         <button

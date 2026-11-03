@@ -1,6 +1,6 @@
 ---
 name: criterios-skins
-description: Criterios y trampas aprendidos al aplicar skins a los 4 juegos (2026-11-02): luminancia y patrones RETRO, viñeta, pieza fantasma, sprites, NEÓN ⚠, servidor dev
+description: Criterios y trampas aprendidos al aplicar skins (2026-11-02/03): luminancia y patrones RETRO, contorno sobre apoyos, viñeta, pieza fantasma, sprites, NEÓN ⚠, franjas de zona, servidor dev
 metadata:
   type: project
 ---
@@ -22,3 +22,6 @@ Criterios reutilizables tras el primer juego con skins (ROCAS, 2026-11-02):
 - Pieza fantasma: en CLÁSICO/RETRO un relleno al 20 % no llega a 3:1; usar contorno (CLÁSICO, color de la pieza) y en RETRO contorno **discontinuo** para no confundirla con las piezas huecas.
 - Viñeta: los radios `H*0.45 → W*0.65` de los motores 800×600 casi coinciden en un canvas estrecho (420×600) y dan un borde duro; calcular los radios con la diagonal (`0.6·d → d`).
 - Puerto 3000: puede haber un `next dev` del mismo repo arrancado por el usuario aunque te digan que está libre; Next 16 no deja arrancar un segundo servidor (sale con error). Verificar contra el existente y no pararlo: solo se para lo que arranca el agente.
+- RANARIA (2026-11-03): en RETRO monocromo, con un elemento que se apoya sobre otro (rana sobre tronco/tortuga, a su vez sobre el río) y viñeta 0.3, es **imposible** que rana/apoyo y apoyo/fondo superen ambos 3:1 solo con brillo. Solución: contorno oscuro (color del fondo, ~2,5 px) detrás del elemento superior (campo `frogOutline` de la paleta) y medir contorno/apoyo. Calcular la viñeta real en el punto (alpha lineal entre radios), no siempre 0.3.
+- Juegos con franjas de zona (río, mediana, seto): el criterio «fondo ≤ `--bg-3`» se aplicó solo al fondo principal (carretera); las franjas pueden ser algo más claras (NEÓN ya lo es) siempre que lo de encima pase 3:1. Decisión a revisar.
+- Paleta de recreativa original como CLÁSICO (Frogger: río azul marino, mediana violeta, tortugas rojas, troncos marrones) funcionó bien; buen punto de partida para ports de clásicos.

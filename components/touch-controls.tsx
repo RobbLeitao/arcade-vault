@@ -157,7 +157,11 @@ export default function TouchControls({
 
   return (
     <div
-      className={"touch-pad" + (disabled ? " is-disabled" : "")}
+      className={
+        "touch-pad" +
+        (layout.actions.length === 0 ? " touch-pad-solo" : "") +
+        (disabled ? " is-disabled" : "")
+      }
       role="group"
       aria-label="Mando táctil"
       onContextMenu={(e) => e.preventDefault()}
