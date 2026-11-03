@@ -82,14 +82,14 @@ No hay que tocar RLS, vistas ni `submitScore`: la política de inserción ya ace
 | Re-renders de React a 60 fps por los callbacks                                   | Callbacks solo al cambiar el valor; valores continuos a pasos de 0.1 s.                                                        |
 | `dt` grande al reanudar tras pausa o cambio de pestaña                           | `dt` acotado a 0.05 s y `lastTime` reiniciado en `resume`.                                                                     |
 | `shadowBlur` penaliza el rendimiento en equipos modestos                         | Uso moderado y ajuste en el último paso sin tocar mecánicas.                                                                   |
-| Sin controles táctiles el juego no es jugable en móvil                           | Aceptado: solo se garantiza que no haya scroll horizontal. Táctil va en otra spec.                                             |
+| Sin controles táctiles el juego no es jugable en móvil                           | `touch: TouchLayout` en `ENGINES` (SPEC 10); el mando despacha las mismas teclas. Lo revisa `mobile-porter`.                   |
 | Juego `playable = true` sin motor real contamina el ranking                      | La migración y la entrada en `ENGINES` van en la misma spec; no se activa antes de que el motor funcione.                      |
 | Cliente falsificado envía una puntuación alta dentro del tope                    | Aceptado (SPEC 06). Anti-trampas serio queda para otra spec; `max_score` se ajusta con una migración.                          |
 | Assets o sonidos del original con licencia o peso desconocidos                   | Por defecto fuera de alcance; si se incluyen, la spec lo declara y se revisa el peso.                                          |
 
 ## Fuera de alcance por defecto
 
-- Controles táctiles o gamepad.
+- Gamepad y gestos sobre el canvas (el mando táctil de la SPEC 10 sí entra).
 - Sonido y música (salvo decisión explícita).
 - Pausa con `Esc`/`P`, pausa automática al perder foco, ajuste a `devicePixelRatio` y pantalla completa.
 - Mecánicas nuevas que no estén en el original.
