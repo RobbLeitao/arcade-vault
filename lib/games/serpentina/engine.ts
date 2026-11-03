@@ -10,9 +10,12 @@ import {
   START_LENGTH,
   START_ROW,
   W,
-  drawFruit,
+  CELL,
+  drawBridge,
   drawGrid,
-  drawSnake,
+  drawHead,
+  drawSegment,
+  segmentInset,
   stepMs,
   silhouetteAtlas,
   tintAtlas,
@@ -24,9 +27,62 @@ import {
 import type { CreateGameOptions, GameCallbacks, GameEngine } from "../contract";
 import { DEFAULT_SKIN, type SkinId } from "../skins";
 import { PALETTES } from "./skins";
+import { createSpriteSet, type FruitArt } from "./sprites";
 
 const FRUITS_SRC = "/games/serpentina/fruits.png";
-const MAX_DT = 50; // ms; menor que el paso mínimo, evita ráfagas de pasos tras una pausa
+
+// Bucle de paso fijo (SPEC 12): el tiempo se simula en pasos de STEP, igual a
+// 60, 120 o 144 Hz. MAX_FRAME acota lo simulado por frame: por debajo de 10 fps
+// el juego va a cámara lenta en vez de saltar. Como mucho se da un paso de la
+// serpiente por frame (nunca una ráfaga) y solo queda pendiente uno.
+const STEP = 1 / 240; // s de simulación por paso
+const STEP_MS = STEP * 1000;
+const MAX_FRAME = 0.1; // s máximos simulados por frame
+
+// Claves de sprite precalculadas (sin crear cadenas en cada frame).
+const SEG_KEYS: string[] = [];
+const BRIDGE_H_KEYS: string[] = [];
+const BRIDGE_V_KEYS: string[] = [];
+for (let inset = 0; inset <= 8; inset++) {
+  SEG_KEYS[inset] = `seg:${inset}`;
+  BRIDGE_H_KEYS[inset] = `bridge:h:${inset}`;
+  BRIDGE_V_KEYS[inset] = `bridge:v:${inset}`;
+}
+const HEAD_KEYS: Record<Direction, string> = {
+  up: "head:up",
+  down: "head:down",
+  left: "head:left",
+  right: "head:right",
+};
+
+// Scanlines y viñeta del skin, pintadas una sola vez; null si no tiene efectos.
+function paintEffects(palette: Palette): HTMLCanvasElement | null {
+  if (palette.scanlines <= 0 && palette.vignette <= 0) return null;
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = H;
+  const c = canvas.getContext("2d");
+  if (!c) return null;
+  if (palette.scanlines > 0) {
+    c.fillStyle = `rgba(0, 0, 0, ${palette.scanlines})`;
+    for (let y = 0; y < H; y += 3) c.fillRect(0, y, W, 1);
+  }
+  if (palette.vignette > 0) {
+    const vignette = c.createRadialGradient(
+      W / 2,
+      H / 2,
+      H * 0.45,
+      W / 2,
+      H / 2,
+      W * 0.65,
+    );
+    vignette.addColorStop(0, "rgba(0, 0, 0, 0)");
+    vignette.addColorStop(1, `rgba(0, 0, 0, ${palette.vignette})`);
+    c.fillStyle = vignette;
+    c.fillRect(0, 0, W, H);
+  }
+  return canvas;
+}
 
 const DIRECTION_KEYS: Record<string, Direction> = {
   ArrowUp: "up",
@@ -59,10 +115,6 @@ let fruitImage: HTMLImageElement | null = null;
 
 // Variantes del atlas por skin (tintado y silueta del contorno). Se generan una
 // sola vez a partir de la imagen precargada y se reutilizan.
-interface FruitArt {
-  image: CanvasImageSource | null;
-  outline: CanvasImageSource | null;
-}
 const fruitArtCache = new Map<SkinId, FruitArt>();
 
 function fruitArt(skin: SkinId, palette: Palette): FruitArt {
@@ -125,27 +177,22 @@ export function createSerpentina(
     };
   }
 
-  // ── Skin (paleta, atlas y efectos de pantalla) ─────────────────────────────
+  // ── Skin (paleta, atlas, sprites, fondo y efectos cacheados) ───────────────
   let palette: Palette;
   let art: FruitArt;
-  let vignette: CanvasGradient | null = null;
+  const sprites = createSpriteSet();
+  const board = document.createElement("canvas"); // fondo y rejilla
+  board.width = W;
+  board.height = H;
+  let boardDirty = true;
+  let effects: HTMLCanvasElement | null = null; // scanlines + viñeta
 
   function applyPalette(skin: SkinId) {
     palette = PALETTES[skin]();
     art = fruitArt(skin, palette);
-    vignette = null;
-    if (palette.vignette > 0) {
-      vignette = ctx!.createRadialGradient(
-        W / 2,
-        H / 2,
-        H * 0.45,
-        W / 2,
-        H / 2,
-        W * 0.65,
-      );
-      vignette.addColorStop(0, "rgba(0, 0, 0, 0)");
-      vignette.addColorStop(1, `rgba(0, 0, 0, ${palette.vignette})`);
-    }
+    sprites.clear();
+    boardDirty = true;
+    effects = paintEffects(palette);
   }
   applyPalette(options?.skin ?? DEFAULT_SKIN);
 
@@ -158,13 +205,15 @@ export function createSerpentina(
   let score: number;
   let fruitsEaten: number;
   let level: number;
-  let stepAccum: number;
+  let stepAccum: number; // ms acumulados hacia el siguiente paso
+  let fruitKey = ""; // clave del sprite de la fruta actual
 
   let paused = false;
   let finished = false; // partida terminada: el motor ya no captura teclas
   let destroyed = false;
   let raf: number | null = null;
   let lastTime: number | null = null;
+  let acc = 0; // s pendientes de simular
 
   // ── Callbacks (solo al cambiar el valor) ────────────────────────────────────
   let sentScore = NaN;
@@ -189,6 +238,7 @@ export function createSerpentina(
     const cell = free[Math.floor(Math.random() * free.length)];
     const sprite = FRUIT_NAMES[Math.floor(Math.random() * FRUIT_NAMES.length)];
     fruit = { ...cell, sprite };
+    fruitKey = fruitImage ? `fruit:${sprite}` : "fruit:none";
     return true;
   }
 
@@ -286,40 +336,88 @@ export function createSerpentina(
   // ── Dibujo ──────────────────────────────────────────────────────────────────
   function draw() {
     const c = ctx!;
-    if (palette.background) {
-      c.fillStyle = palette.background;
-      c.fillRect(0, 0, W, H);
-    } else {
-      c.clearRect(0, 0, W, H);
+    if (boardDirty) {
+      const b = board.getContext("2d");
+      if (b) {
+        b.clearRect(0, 0, W, H);
+        if (palette.background) {
+          b.fillStyle = palette.background;
+          b.fillRect(0, 0, W, H);
+        }
+        drawGrid(b, palette);
+      }
+      boardDirty = false;
     }
-    drawGrid(c, palette);
-    if (fruit) drawFruit(c, palette, fruit, art.image, art.outline);
-    drawSnake(c, palette, snake, dir);
-    drawScreenEffects(c);
+    // Con fondo opaco el tablero tapa el frame anterior; sin él (NEÓN) se limpia
+    // para que se vea el negro de .crt-screen.
+    if (!palette.background) c.clearRect(0, 0, W, H);
+    c.drawImage(board, 0, 0);
+    if (fruit) {
+      const s = sprites.get(fruitKey, palette, art);
+      c.drawImage(s.canvas, fruit.col * CELL - s.ox, fruit.row * CELL - s.oy);
+    }
+    drawSnake(c);
+    if (effects) c.drawImage(effects, 0, 0);
   }
 
-  // Efectos de pantalla del skin (scanlines y viñeta), estáticos: sin parpadeo.
-  function drawScreenEffects(c: CanvasRenderingContext2D) {
-    if (palette.scanlines > 0) {
-      c.fillStyle = `rgba(0, 0, 0, ${palette.scanlines})`;
-      for (let y = 0; y < H; y += 3) c.fillRect(0, y, W, 1);
+  // De la cola a la cabeza, cada pieza y su puente hacia la anterior, y la
+  // cabeza al final. Con glow se copian sprites cacheados; sin glow (CLÁSICO) no
+  // hay sombra que ahorrar y se dibuja directo: los ojos antialiasados en un
+  // canvas aparte no salen idénticos al píxel (decisión del agente, a revisar).
+  function drawSnake(c: CanvasRenderingContext2D) {
+    const cached = palette.glow > 0;
+    const n = snake.length;
+    for (let i = n - 1; i >= 1; i--) {
+      const { col, row } = snake[i];
+      const inset = segmentInset(i, n);
+      if (cached) {
+        const seg = sprites.get(SEG_KEYS[inset], palette, art);
+        c.drawImage(seg.canvas, col * CELL - seg.ox, row * CELL - seg.oy);
+      } else {
+        drawSegment(c, palette, col * CELL, row * CELL, inset);
+      }
+
+      // No se une a través del borde cuando la serpiente se envuelve.
+      const prev = snake[i - 1];
+      if (Math.abs(prev.col - col) + Math.abs(prev.row - row) === 1) {
+        const horizontal = prev.row === row;
+        const x = Math.min(col, prev.col) * CELL;
+        const y = Math.min(row, prev.row) * CELL;
+        if (cached) {
+          const k = horizontal ? BRIDGE_H_KEYS[inset] : BRIDGE_V_KEYS[inset];
+          const br = sprites.get(k, palette, art);
+          c.drawImage(br.canvas, x - br.ox, y - br.oy);
+        } else {
+          drawBridge(c, palette, x, y, inset, horizontal);
+        }
+      }
     }
-    if (vignette) {
-      c.fillStyle = vignette;
-      c.fillRect(0, 0, W, H);
+    const hx = snake[0].col * CELL;
+    const hy = snake[0].row * CELL;
+    if (cached) {
+      const head = sprites.get(HEAD_KEYS[dir], palette, art);
+      c.drawImage(head.canvas, hx - head.ox, hy - head.oy);
+    } else {
+      drawHead(c, palette, hx, hy, dir);
     }
   }
 
   // ── Bucle ───────────────────────────────────────────────────────────────────
   function loop(ts: number) {
     raf = null;
-    const dt = lastTime === null ? 0 : Math.min(ts - lastTime, MAX_DT);
+    const elapsed = lastTime === null ? 0 : (ts - lastTime) / 1000;
     lastTime = ts;
-    stepAccum += dt;
+    acc += Math.min(elapsed, MAX_FRAME);
+    while (acc >= STEP) {
+      stepAccum += STEP_MS;
+      acc -= STEP;
+    }
     const interval = stepMs(level);
     if (stepAccum >= interval) {
       stepAccum -= interval;
       step();
+      // Un frame largo no suelta varios pasos: como mucho queda uno pendiente.
+      if (stepAccum > interval) stepAccum = interval;
     }
     if (finished) return;
     emit();
@@ -330,6 +428,7 @@ export function createSerpentina(
   function startLoop() {
     if (raf !== null || destroyed || finished) return;
     lastTime = null;
+    acc = 0;
     raf = requestAnimationFrame(loop);
   }
 

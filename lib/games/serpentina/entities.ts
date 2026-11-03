@@ -128,42 +128,66 @@ export function drawGrid(ctx: CanvasRenderingContext2D, palette: Palette) {
   ctx.restore();
 }
 
-// Cuerpo con rectángulos redondeados y glow según el skin; la cabeza (índice 0)
-// es más clara y lleva dos ojos mirando hacia `dir`.
-export function drawSnake(
+export const SNAKE_GLOW = 14; // shadowBlur del cuerpo con glow = 1
+export const FRUIT_GLOW = 10; // shadowBlur del círculo de respaldo con glow = 1
+
+// Margen (px) de la pieza `i` del cuerpo: las tres últimas se afinan hacia la cola.
+export function segmentInset(i: number, length: number): number {
+  const fromTail = length - 1 - i;
+  return SNAKE_INSET + Math.max(0, TAPER_SEGMENTS - fromTail);
+}
+
+function snakeGlow(ctx: CanvasRenderingContext2D, palette: Palette) {
+  ctx.shadowColor = palette.snake;
+  ctx.shadowBlur = SNAKE_GLOW * palette.glow;
+}
+
+// Pieza del cuerpo en la celda de origen (x, y), con su glow.
+export function drawSegment(
   ctx: CanvasRenderingContext2D,
   palette: Palette,
-  snake: Cell[],
+  x: number,
+  y: number,
+  inset: number,
+) {
+  ctx.save();
+  snakeGlow(ctx, palette);
+  ctx.fillStyle = palette.snake;
+  ctx.beginPath();
+  ctx.roundRect(x + inset, y + inset, CELL - inset * 2, CELL - inset * 2, 8);
+  ctx.fill();
+  ctx.restore();
+}
+
+// Puente entre dos piezas contiguas para que el cuerpo se lea continuo; (x, y)
+// es el origen de la celda de menor columna/fila de las dos.
+export function drawBridge(
+  ctx: CanvasRenderingContext2D,
+  palette: Palette,
+  x: number,
+  y: number,
+  inset: number,
+  horizontal: boolean,
+) {
+  const size = CELL - inset * 2;
+  ctx.save();
+  snakeGlow(ctx, palette);
+  ctx.fillStyle = palette.snake;
+  if (horizontal) ctx.fillRect(x + CELL / 2, y + inset, CELL, size);
+  else ctx.fillRect(x + inset, y + CELL / 2, size, CELL);
+  ctx.restore();
+}
+
+// Cabeza más clara, con glow, y dos ojos (sin glow) mirando hacia `dir`.
+export function drawHead(
+  ctx: CanvasRenderingContext2D,
+  palette: Palette,
+  hx: number,
+  hy: number,
   dir: Direction,
 ) {
   ctx.save();
-  ctx.shadowColor = palette.snake;
-  ctx.shadowBlur = 14 * palette.glow;
-  ctx.fillStyle = palette.snake;
-  for (let i = snake.length - 1; i >= 1; i--) {
-    const { col, row } = snake[i];
-    // Las tres últimas piezas se afinan hacia la cola.
-    const fromTail = snake.length - 1 - i;
-    const inset = SNAKE_INSET + Math.max(0, TAPER_SEGMENTS - fromTail);
-    const size = CELL - inset * 2;
-    ctx.beginPath();
-    ctx.roundRect(col * CELL + inset, row * CELL + inset, size, size, 8);
-    ctx.fill();
-
-    // Puente hacia la pieza anterior para que el cuerpo se lea continuo; no se
-    // une a través del borde cuando la serpiente se envuelve.
-    const prev = snake[i - 1];
-    if (Math.abs(prev.col - col) + Math.abs(prev.row - row) === 1) {
-      const x = Math.min(col, prev.col) * CELL;
-      const y = Math.min(row, prev.row) * CELL;
-      if (prev.row === row) ctx.fillRect(x + CELL / 2, y + inset, CELL, size);
-      else ctx.fillRect(x + inset, y + CELL / 2, size, CELL);
-    }
-  }
-
-  const head = snake[0];
-  const hx = head.col * CELL;
-  const hy = head.row * CELL;
+  snakeGlow(ctx, palette);
   ctx.fillStyle = palette.head;
   ctx.beginPath();
   ctx.roundRect(hx + 1, hy + 1, CELL - 2, CELL - 2, 10);
@@ -206,7 +230,7 @@ export function drawFruit(
   ctx.save();
   if (!image) {
     ctx.shadowColor = palette.fallback;
-    ctx.shadowBlur = 10 * palette.glow;
+    ctx.shadowBlur = FRUIT_GLOW * palette.glow;
     ctx.fillStyle = palette.fallback;
     ctx.beginPath();
     ctx.arc(cx, cy, CELL / 2 - FRUIT_MARGIN - 4, 0, Math.PI * 2);

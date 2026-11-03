@@ -6,6 +6,7 @@ export const W = 420; // BOARD_W + panel lateral de 120 px
 export const H = ROWS * BLOCK; // 600
 export const LINE_SCORES = [0, 100, 300, 500, 800];
 export const KICKS = [0, -1, 1, -2, 2];
+export const BLOCK_GLOW = 8; // shadowBlur del bloque con glow 1
 
 // Índice 1..8 = I, O, T, S, Z, J, L, N (tuerca). Las celdas guardan su índice.
 export const PIECES: (number[][] | null)[] = [
@@ -133,7 +134,7 @@ export function drawBlock(
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.shadowColor = color;
-  ctx.shadowBlur = 8 * palette.glow;
+  ctx.shadowBlur = BLOCK_GLOW * palette.glow;
   ctx.fillStyle = color;
   ctx.fillRect(px, py, size, size);
   ctx.shadowBlur = 0;
