@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import GameCanvas, { type GameHandle } from "@/components/game-canvas";
+import TouchControls from "@/components/touch-controls";
 import { submitScore } from "@/app/jugar/[id]/actions";
 import type { Game } from "@/lib/games";
 import type { HudStat } from "@/lib/games/contract";
@@ -62,6 +63,17 @@ export default function GamePlayer({ game }: { game: Game }) {
     if (paused) engineRef.current?.pause();
     else engineRef.current?.resume();
   }, [entry, paused]);
+
+  // Auto-pausa al ocultar la página (cambio de pestaña o de app). Girar la
+  // pantalla no la oculta, así que no pausa. Con la partida terminada no hace nada.
+  useEffect(() => {
+    if (over) return;
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") setPaused(true);
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [over]);
 
   useEffect(() => {
     if (entry || over || paused) return;
@@ -126,7 +138,7 @@ export default function GamePlayer({ game }: { game: Game }) {
   return (
     <div className="av-player fade-in">
       <div className="player-hud">
-        <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
+        <div className="hud-stats">
           <div className="hud-stat">
             <div className="l">Jugador</div>
             <div className="v" style={{ color: "var(--ink)" }}>
@@ -172,136 +184,144 @@ export default function GamePlayer({ game }: { game: Game }) {
         </div>
       </div>
 
-      <div
-        className={entry ? "crt crt-fit" : "crt"}
-        style={
-          entry
-            ? ({
-                "--game-aspect": entry.width / entry.height,
-              } as React.CSSProperties)
-            : undefined
-        }
-      >
+      {/* Escenario: canvas + mando táctil (debajo en vertical, a los lados en
+          horizontal). Sin pointer coarse el mando no se monta y el escenario
+          es un simple contenedor. */}
+      <div className={"player-stage" + (entry?.touch ? " has-touch" : "")}>
         <div
-          className="crt-screen"
+          className={entry ? "crt crt-fit" : "crt"}
           style={
             entry
-              ? { aspectRatio: `${entry.width} / ${entry.height}` }
+              ? ({
+                  "--game-aspect": entry.width / entry.height,
+                } as React.CSSProperties)
               : undefined
           }
         >
-          {entry ? (
-            <GameCanvas
-              ref={engineRef}
-              gameId={game.id}
-              label={`Juego ${game.title}`}
-              skin={entry.skins ? skin : undefined}
-              onScore={setScore}
-              onLives={setLives}
-              onLevel={setEngineLevel}
-              onStats={setStats}
-              onGameOver={handleGameOver}
-              onPauseKey={() => setPaused((p) => !p)}
-            />
-          ) : (
-            <div className="game-arena">
-              <div className="grid-floor"></div>
-              <div className="enemy e1"></div>
-              <div className="enemy e2"></div>
-              <div className="enemy e3"></div>
-              <div className="player-ship"></div>
-            </div>
-          )}
-          {paused && (
-            <div
-              className="crt-content"
-              style={{ background: "rgba(0,0,0,0.6)", zIndex: 5 }}
-            >
-              <div>
-                <div className="pixel neon-yellow" style={{ fontSize: 22 }}>
-                  EN PAUSA
-                </div>
-                <div
-                  className="mono"
-                  style={{
-                    fontSize: 11,
-                    color: "var(--ink-dim)",
-                    marginTop: 10,
-                    letterSpacing: "0.16em",
-                  }}
-                >
-                  PULSA REANUDAR PARA CONTINUAR
-                </div>
-                {entry?.levels && (
-                  <div className="level-picker">
-                    <div className="level-picker-label mono">
-                      SALTAR AL NIVEL
-                    </div>
-                    <div className="level-picker-list">
-                      {Array.from(
-                        { length: entry.levels },
-                        (_, i) => i + 1,
-                      ).map((n) => (
-                        <button
-                          key={n}
-                          type="button"
-                          className={
-                            "btn level-btn" +
-                            (n === engineLevel ? " current" : "")
-                          }
-                          aria-pressed={n === engineLevel}
-                          onClick={() => {
-                            engineRef.current?.goToLevel?.(n);
-                            setPaused(false);
-                          }}
-                        >
-                          {n}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {entry?.skins && (
-                  <div className="level-picker">
-                    <div
-                      id="skin-picker-label"
-                      className="level-picker-label mono"
-                    >
-                      SKIN
-                    </div>
-                    <div
-                      className="level-picker-list"
-                      role="group"
-                      aria-labelledby="skin-picker-label"
-                    >
-                      {SKIN_IDS.map((id) => (
-                        <button
-                          key={id}
-                          type="button"
-                          className={
-                            "btn skin-btn" + (id === skin ? " current" : "")
-                          }
-                          aria-pressed={id === skin}
-                          onClick={() => {
-                            setSkin(id);
-                            saveSkin(game.id, id);
-                          }}
-                        >
-                          {SKIN_LABELS[id]}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
+          <div
+            className="crt-screen"
+            style={
+              entry
+                ? { aspectRatio: `${entry.width} / ${entry.height}` }
+                : undefined
+            }
+          >
+            {entry ? (
+              <GameCanvas
+                ref={engineRef}
+                gameId={game.id}
+                label={`Juego ${game.title}`}
+                skin={entry.skins ? skin : undefined}
+                onScore={setScore}
+                onLives={setLives}
+                onLevel={setEngineLevel}
+                onStats={setStats}
+                onGameOver={handleGameOver}
+                onPauseKey={() => setPaused((p) => !p)}
+              />
+            ) : (
+              <div className="game-arena">
+                <div className="grid-floor"></div>
+                <div className="enemy e1"></div>
+                <div className="enemy e2"></div>
+                <div className="enemy e3"></div>
+                <div className="player-ship"></div>
               </div>
-            </div>
-          )}
+            )}
+            {paused && (
+              <div
+                className="crt-content"
+                style={{ background: "rgba(0,0,0,0.6)", zIndex: 5 }}
+              >
+                <div>
+                  <div className="pixel neon-yellow" style={{ fontSize: 22 }}>
+                    EN PAUSA
+                  </div>
+                  <div
+                    className="mono"
+                    style={{
+                      fontSize: 11,
+                      color: "var(--ink-dim)",
+                      marginTop: 10,
+                      letterSpacing: "0.16em",
+                    }}
+                  >
+                    PULSA REANUDAR PARA CONTINUAR
+                  </div>
+                  {entry?.levels && (
+                    <div className="level-picker">
+                      <div className="level-picker-label mono">
+                        SALTAR AL NIVEL
+                      </div>
+                      <div className="level-picker-list">
+                        {Array.from(
+                          { length: entry.levels },
+                          (_, i) => i + 1,
+                        ).map((n) => (
+                          <button
+                            key={n}
+                            type="button"
+                            className={
+                              "btn level-btn" +
+                              (n === engineLevel ? " current" : "")
+                            }
+                            aria-pressed={n === engineLevel}
+                            onClick={() => {
+                              engineRef.current?.goToLevel?.(n);
+                              setPaused(false);
+                            }}
+                          >
+                            {n}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {entry?.skins && (
+                    <div className="level-picker">
+                      <div
+                        id="skin-picker-label"
+                        className="level-picker-label mono"
+                      >
+                        SKIN
+                      </div>
+                      <div
+                        className="level-picker-list"
+                        role="group"
+                        aria-labelledby="skin-picker-label"
+                      >
+                        {SKIN_IDS.map((id) => (
+                          <button
+                            key={id}
+                            type="button"
+                            className={
+                              "btn skin-btn" + (id === skin ? " current" : "")
+                            }
+                            aria-pressed={id === skin}
+                            onClick={() => {
+                              setSkin(id);
+                              saveSkin(game.id, id);
+                            }}
+                          >
+                            {SKIN_LABELS[id]}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="crt-bottom">
+            <span className="led">SEÑAL OK</span>
+            <span>{game.title} · CRT-83 · 60 HZ</span>
+            <span>CARGA · 1MB</span>
+          </div>
         </div>
-        <div className="crt-bottom">
-          <span className="led">SEÑAL OK</span>
-          <span>{game.title} · CRT-83 · 60 HZ</span>
-          <span>CARGA · 1MB</span>
-        </div>
+        {entry?.touch && !over && (
+          <TouchControls layout={entry.touch} disabled={paused || over} />
+        )}
       </div>
 
       {over && (

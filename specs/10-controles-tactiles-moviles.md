@@ -1,6 +1,6 @@
 # SPEC 10 — Controles táctiles: jugar en el móvil
 
-> **Estado:** Aprobado
+> **Estado:** Implementado
 > **Depende de:** SPEC 05, SPEC 07, SPEC 08, SPEC 09
 > **Fecha:** 2026-11-03
 > **Objetivo:** Añadir un mando virtual en pantalla, visible solo en dispositivos táctiles, que despacha las mismas teclas que ya entienden los motores para que ROCAS, CAÍDA, BLOQUE BUSTER y SERPENTINA se puedan jugar en un móvil, en vertical y en horizontal.
@@ -123,34 +123,46 @@ La verificación automática usa Playwright con un contexto móvil (`devices["iP
 
 ## Criterios de aceptación
 
-- [ ] `npm run lint` y `npm run build` terminan sin errores ni warnings de hidratación o de Cache Components.
-- [ ] Ningún archivo de `lib/games/*/engine.ts`, `lib/games/*/entities.ts` ni `lib/games/contract.ts` cambia en esta spec.
-- [ ] En escritorio con ratón (1280 px, Chromium sin emulación) `/jugar/rocas`, `/jugar/caida`, `/jugar/bloque-buster` y `/jugar/serpentina` no muestran el mando y se ven igual que antes.
-- [ ] En escritorio, el teclado sigue controlando los cuatro juegos igual que antes (flechas, `Space`, `P`, `Escape`, WASD en SERPENTINA).
-- [ ] Con emulación móvil (`hasTouch`, `isMobile`, 390×844) los cuatro juegos muestran el mando bajo el canvas, con el grupo de dirección a la izquierda y las acciones a la derecha.
-- [ ] Con emulación móvil en 844×390, el grupo de dirección queda a la izquierda del canvas y el de acciones a la derecha.
-- [ ] En 390×844 y 844×390, HUD, canvas y mando caben sin scroll vertical ni horizontal, y el canvas conserva su proporción (4:3, o 420:600 en CAÍDA).
-- [ ] ROCAS: mantener `←` o `→` gira la nave de forma continua, mantener `↑` la impulsa y `FUEGO` dispara.
-- [ ] ROCAS: girar, empujar y disparar a la vez con tres dedos funciona (los tres efectos se ven en el mismo momento).
-- [ ] CAÍDA: un toque corto en `←` mueve la pieza una sola celda; mantenerlo la mueve celda a celda de forma continua hasta soltar.
-- [ ] CAÍDA: `↓` mantenido baja la pieza de forma continua, `ROTAR` gira la pieza una vez por toque y `SOLTAR` la deja caer de golpe una vez por toque.
-- [ ] BLOQUE BUSTER: mantener `←` o `→` mueve la paleta de forma continua y se detiene al soltar.
-- [ ] SERPENTINA: la cruceta tiene los cuatro botones en cruz y cada toque gira la serpiente; dos toques rápidos dentro de un mismo paso ejecutan ambos giros.
-- [ ] Al soltar un dedo, o si el navegador cancela el toque (`pointercancel`), la tecla correspondiente se suelta: ninguna acción se queda «enganchada».
-- [ ] Mantener pulsado un botón del mando no abre el menú contextual, no selecciona texto, no hace scroll ni zoom.
-- [ ] Al pulsar `PAUSA` con una tecla del mando mantenida, la tecla se suelta; al `REANUDAR`, la nave, la pieza o la paleta no siguen moviéndose solas.
-- [ ] Con la partida en pausa, tocar los botones del mando no mueve nada.
-- [ ] Con la partida terminada el mando no se muestra, y el modal «FIN DEL JUEGO» (iniciales, guardar, jugar de nuevo) funciona con el táctil.
-- [ ] «JUGAR DE NUEVO» vuelve a mostrar el mando y este funciona en la nueva partida.
-- [ ] El selector de nivel (BLOQUE BUSTER) y el de skin del panel de pausa se pueden usar con el táctil.
-- [ ] Ocultar la página durante una partida (cambiar de pestaña o de app) la deja en «EN PAUSA» al volver; con la partida terminada no ocurre nada.
-- [ ] Girar el móvil durante una partida no la pausa ni la reinicia, y el mando cambia de disposición.
-- [ ] Cada botón del mando tiene un `aria-label` en español y el grupo tiene `role="group"` con `aria-label="Mando táctil"`.
-- [ ] Al salir con `SALIR` o navegar a otra ruta con una tecla del mando mantenida, no queda ninguna tecla pulsada ni temporizador activo (no hay errores en consola).
-- [ ] Los juegos simulados (por ejemplo `/jugar/gloton`) no muestran mando y su auto-pausa al ocultar la página funciona.
-- [ ] En un móvil real (Android o iOS), en la red local con `npm run start -- -H 0.0.0.0`, se completa una partida de cada uno de los cuatro juegos solo con el táctil.
-- [ ] La consola del navegador no muestra errores ni warnings durante una partida con el mando.
-- [ ] Hay capturas de los cuatro juegos en 390×844 y en 844×390 en `.playwright-screenshots/touch/`.
+- [x] `npm run lint` y `npm run build` terminan sin errores ni warnings de hidratación o de Cache Components.
+- [x] Ningún archivo de `lib/games/*/engine.ts`, `lib/games/*/entities.ts` ni `lib/games/contract.ts` cambia en esta spec.
+- [x] En escritorio con ratón (1280 px, Chromium sin emulación) `/jugar/rocas`, `/jugar/caida`, `/jugar/bloque-buster` y `/jugar/serpentina` no muestran el mando y se ven igual que antes.
+- [x] En escritorio, el teclado sigue controlando los cuatro juegos igual que antes (flechas, `Space`, `P`, `Escape`, WASD en SERPENTINA).
+- [x] Con emulación móvil (`hasTouch`, `isMobile`, 390×844) los cuatro juegos muestran el mando bajo el canvas, con el grupo de dirección a la izquierda y las acciones a la derecha.
+- [x] Con emulación móvil en 844×390, el grupo de dirección queda a la izquierda del canvas y el de acciones a la derecha.
+- [x] En 390×844 y 844×390, HUD, canvas y mando caben sin scroll vertical ni horizontal, y el canvas conserva su proporción (4:3, o 420:600 en CAÍDA).
+- [x] ROCAS: mantener `←` o `→` gira la nave de forma continua, mantener `↑` la impulsa y `FUEGO` dispara.
+- [x] ROCAS: girar, empujar y disparar a la vez con tres dedos funciona (los tres efectos se ven en el mismo momento).
+- [x] CAÍDA: un toque corto en `←` mueve la pieza una sola celda; mantenerlo la mueve celda a celda de forma continua hasta soltar.
+- [x] CAÍDA: `↓` mantenido baja la pieza de forma continua, `ROTAR` gira la pieza una vez por toque y `SOLTAR` la deja caer de golpe una vez por toque.
+- [x] BLOQUE BUSTER: mantener `←` o `→` mueve la paleta de forma continua y se detiene al soltar.
+- [x] SERPENTINA: la cruceta tiene los cuatro botones en cruz y cada toque gira la serpiente; dos toques rápidos dentro de un mismo paso ejecutan ambos giros.
+- [x] Al soltar un dedo, o si el navegador cancela el toque (`pointercancel`), la tecla correspondiente se suelta: ninguna acción se queda «enganchada».
+- [x] Mantener pulsado un botón del mando no abre el menú contextual, no selecciona texto, no hace scroll ni zoom.
+- [x] Al pulsar `PAUSA` con una tecla del mando mantenida, la tecla se suelta; al `REANUDAR`, la nave, la pieza o la paleta no siguen moviéndose solas.
+- [x] Con la partida en pausa, tocar los botones del mando no mueve nada.
+- [x] Con la partida terminada el mando no se muestra, y el modal «FIN DEL JUEGO» (iniciales, guardar, jugar de nuevo) funciona con el táctil.
+- [x] «JUGAR DE NUEVO» vuelve a mostrar el mando y este funciona en la nueva partida.
+- [x] El selector de nivel (BLOQUE BUSTER) y el de skin del panel de pausa se pueden usar con el táctil.
+- [x] Ocultar la página durante una partida (cambiar de pestaña o de app) la deja en «EN PAUSA» al volver; con la partida terminada no ocurre nada.
+- [x] Girar el móvil durante una partida no la pausa ni la reinicia, y el mando cambia de disposición.
+- [x] Cada botón del mando tiene un `aria-label` en español y el grupo tiene `role="group"` con `aria-label="Mando táctil"`.
+- [x] Al salir con `SALIR` o navegar a otra ruta con una tecla del mando mantenida, no queda ninguna tecla pulsada ni temporizador activo (no hay errores en consola).
+- [x] Los juegos simulados (por ejemplo `/jugar/gloton`) no muestran mando y su auto-pausa al ocultar la página funciona.
+- [x] En un móvil real (Android o iOS), en la red local con `npm run start -- -H 0.0.0.0`, se completa una partida de cada uno de los cuatro juegos solo con el táctil.
+- [x] La consola del navegador no muestra errores ni warnings durante una partida con el mando. _Nota: en desarrollo solo aparece el error previo de Next «`params` … accessed outside of `<Suspense>`» en `/jugar/[id]` (`PlayPage`), ajeno al mando; queda para otra spec._
+- [x] Hay capturas de los cuatro juegos en 390×844 y en 844×390 en `.playwright-screenshots/touch/`.
+
+---
+
+## Notas de implementación
+
+- **Nav compacta en móvil horizontal:** solo en la pantalla de juego con mando (`body:has(.player-stage.has-touch)`), con pointer coarse, en horizontal y con alto ≤500 px, se ocultan los enlaces y las monedas y queda el menú ☰. La nav ya desbordaba a 844 px en todo el sitio; el resto de páginas no cambia (la revisión responsive está fuera de alcance).
+- **Pie del CRT oculto en móvil horizontal** («SEÑAL OK · …»): es la reducción del marco prevista en los riesgos, para que CAÍDA quepa en 844×390.
+- **HUD compacto también en móvil horizontal** de poca altura, además de en `≤720px`.
+- **Modal «FIN DEL JUEGO» en `≤520px`:** iniciales y GUARDAR apilados a todo el ancho. El botón ya se salía del modal antes de esta spec; se arregla porque un criterio pide que el modal funcione en el móvil.
+- Las flechas del mando usan JetBrains Mono: Press Start 2P no tiene todas las flechas y mezclaba estilos.
+- `pointerdown` llama a `preventDefault` para que los botones no tomen el foco.
+- El estilo en línea de las estadísticas del HUD pasa a la clase `.hud-stats` (mismo `gap`) para poder compactarlo desde CSS.
 
 ---
 
