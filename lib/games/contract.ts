@@ -1,4 +1,5 @@
 import type { GameColor } from "@/lib/games";
+import type { SkinId } from "./skins";
 
 export interface HudStat {
   key: string; // estable, para el key de React
@@ -23,9 +24,17 @@ export interface GameEngine {
   end: () => void; // termina la partida en curso y llama a onGameOver
   destroy: () => void; // cancela el bucle y quita los listeners
   goToLevel?: (level: number) => void; // salta al nivel indicado (1..levels); solo motores con niveles
+  // Cambia la paleta en caliente, sin reiniciar ni tocar puntuación, vidas o nivel.
+  // Solo motores con `skins: true` en el registro.
+  setSkin?: (skin: SkinId) => void;
+}
+
+export interface CreateGameOptions {
+  skin?: SkinId; // skin inicial; los motores sin skins lo ignoran
 }
 
 export type CreateGame = (
   canvas: HTMLCanvasElement,
   callbacks: GameCallbacks,
+  options?: CreateGameOptions,
 ) => GameEngine;

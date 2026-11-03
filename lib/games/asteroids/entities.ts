@@ -14,15 +14,19 @@ export const POINTS = [0, 100, 50, 20];
 export type AsteroidSize = 1 | 2 | 3;
 export type Keys = Record<string, boolean | undefined>;
 
+// Colores y efectos de un skin (ver ./skins.ts).
 export interface Palette {
   ship: string;
   rock: string;
   bullet: string;
-  powerUp: string;
-  spark: string;
+  powerUp: string; // marco y texto «3x»
+  spark: string; // partículas de explosión
+  flame: string; // llama del propulsor
+  background: string | null; // null = canvas transparente (se ve el fondo de .crt-screen)
+  glow: number; // multiplicador de shadowBlur; 0 = sin glow
+  scanlines: number; // opacidad de las scanlines dibujadas en el canvas; 0 = ninguna
+  vignette: number; // opacidad de la viñeta en las esquinas; 0 = ninguna
 }
-
-const FLAME_COLOR = "rgba(255, 130, 0, 0.85)";
 
 export const wrap = (v: number, max: number) => ((v % max) + max) % max;
 export const dist = (
@@ -34,9 +38,14 @@ export const rand = (min: number, max: number) =>
 export const randInt = (min: number, max: number) =>
   Math.floor(rand(min, max + 1));
 
-function glow(ctx: CanvasRenderingContext2D, color: string, blur = 8) {
+function glow(
+  ctx: CanvasRenderingContext2D,
+  palette: Palette,
+  color: string,
+  blur = 8,
+) {
   ctx.shadowColor = color;
-  ctx.shadowBlur = blur;
+  ctx.shadowBlur = blur * palette.glow;
 }
 
 // ── Bullet ────────────────────────────────────────────────────────────────────
@@ -66,7 +75,7 @@ export class Bullet {
 
   draw(ctx: CanvasRenderingContext2D, palette: Palette) {
     ctx.save();
-    glow(ctx, palette.bullet, 12);
+    glow(ctx, palette, palette.bullet, 12);
     ctx.fillStyle = palette.bullet;
     ctx.beginPath();
     // Un poco más grande que el radio de colisión para que se vea con el brillo.
@@ -130,7 +139,7 @@ export class Asteroid {
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.rot);
-    glow(ctx, palette.rock, 9);
+    glow(ctx, palette, palette.rock, 9);
     ctx.strokeStyle = palette.rock;
     ctx.lineWidth = 1.75;
     ctx.lineJoin = "round";
@@ -175,7 +184,7 @@ export class PowerUp {
     if (this.ttl < 2 && Math.floor(this.ttl * 8) % 2 === 0) return;
     const pulse = 0.85 + Math.sin(performance.now() / 150) * 0.15;
     ctx.save();
-    glow(ctx, palette.powerUp, 10);
+    glow(ctx, palette, palette.powerUp, 10);
     ctx.translate(this.x, this.y);
     ctx.rotate(Math.PI / 4);
     ctx.strokeStyle = palette.powerUp;
@@ -185,7 +194,7 @@ export class PowerUp {
     ctx.restore();
 
     ctx.save();
-    glow(ctx, palette.powerUp, 10);
+    glow(ctx, palette, palette.powerUp, 10);
     ctx.fillStyle = palette.powerUp;
     ctx.font = "bold 12px monospace";
     ctx.textAlign = "center";
@@ -273,7 +282,7 @@ export class Ship {
     ctx.translate(this.x, this.y);
     ctx.rotate(this.angle);
     // La nave es lo más brillante de la pantalla.
-    glow(ctx, palette.ship, 16);
+    glow(ctx, palette, palette.ship, 16);
     ctx.strokeStyle = palette.ship;
     ctx.lineWidth = 2;
     ctx.lineJoin = "round";
@@ -293,8 +302,8 @@ export class Ship {
       ctx.moveTo(-8, -4);
       ctx.lineTo(-8 - rand(6, 14), 0);
       ctx.lineTo(-8, 4);
-      ctx.strokeStyle = FLAME_COLOR;
-      glow(ctx, FLAME_COLOR);
+      ctx.strokeStyle = palette.flame;
+      glow(ctx, palette, palette.flame);
       ctx.stroke();
     }
 
@@ -333,7 +342,7 @@ export class Particle {
   draw(ctx: CanvasRenderingContext2D, palette: Palette) {
     ctx.save();
     ctx.globalAlpha = Math.max(this.ttl / this.life, 0);
-    glow(ctx, palette.spark, 6);
+    glow(ctx, palette, palette.spark, 6);
     ctx.strokeStyle = palette.spark;
     ctx.lineWidth = 1.25;
     ctx.beginPath();

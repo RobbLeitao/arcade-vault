@@ -14,12 +14,16 @@ import {
   drawGrid,
   drawSnake,
   stepMs,
+  silhouetteAtlas,
+  tintAtlas,
   type Cell,
   type Direction,
   type Fruit,
   type Palette,
 } from "./entities";
-import type { GameCallbacks, GameEngine } from "../contract";
+import type { CreateGameOptions, GameCallbacks, GameEngine } from "../contract";
+import { DEFAULT_SKIN, type SkinId } from "../skins";
+import { PALETTES } from "./skins";
 
 const FRUITS_SRC = "/games/serpentina/fruits.png";
 const MAX_DT = 50; // ms; menor que el paso mínimo, evita ráfagas de pasos tras una pausa
@@ -49,16 +53,35 @@ const OPPOSITE: Record<Direction, Direction> = {
   right: "left",
 };
 
-// Valores de respaldo iguales a los del tema (app/globals.css).
-const FALLBACK_THEME = {
-  green: "#00ff88",
-  magenta: "#ff006e",
-  ink: "#e8ecff",
-};
-
 // Imagen precargada: solo se escribe una vez al cargar y después es de solo
 // lectura, así que es seguro compartirla entre instancias del motor.
 let fruitImage: HTMLImageElement | null = null;
+
+// Variantes del atlas por skin (tintado y silueta del contorno). Se generan una
+// sola vez a partir de la imagen precargada y se reutilizan.
+interface FruitArt {
+  image: CanvasImageSource | null;
+  outline: CanvasImageSource | null;
+}
+const fruitArtCache = new Map<SkinId, FruitArt>();
+
+function fruitArt(skin: SkinId, palette: Palette): FruitArt {
+  if (!fruitImage) return { image: null, outline: null };
+  let art = fruitArtCache.get(skin);
+  if (!art) {
+    art = {
+      // Si no se pudo tintar, se usa la imagen original.
+      image:
+        (palette.fruitTint && tintAtlas(fruitImage, palette.fruitTint)) ||
+        fruitImage,
+      outline: palette.fruitOutline
+        ? silhouetteAtlas(fruitImage, palette.fruitOutline)
+        : null,
+    };
+    fruitArtCache.set(skin, art);
+  }
+  return art;
+}
 
 // Precarga fruits.png. Nunca rechaza: si falla, el motor dibuja el círculo de respaldo.
 export function loadFruitSprites(): Promise<void> {
@@ -72,18 +95,6 @@ export function loadFruitSprites(): Promise<void> {
     img.onerror = () => resolve();
     img.src = FRUITS_SRC;
   });
-}
-
-function readPalette(): Palette {
-  const style = getComputedStyle(document.documentElement);
-  const read = (name: string, fallback: string) =>
-    style.getPropertyValue(name).trim() || fallback;
-  return {
-    snake: read("--green", FALLBACK_THEME.green),
-    head: "#7dffc0",
-    grid: "rgba(232, 236, 255, 0.05)",
-    fallback: read("--magenta", FALLBACK_THEME.magenta),
-  };
 }
 
 function isTextField(target: EventTarget | null) {
@@ -100,6 +111,7 @@ const key = (c: Cell) => `${c.col},${c.row}`;
 export function createSerpentina(
   canvas: HTMLCanvasElement,
   callbacks: GameCallbacks,
+  options?: CreateGameOptions,
 ): GameEngine {
   const ctx = canvas.getContext("2d");
   if (!ctx) {
@@ -113,7 +125,29 @@ export function createSerpentina(
     };
   }
 
-  const palette = readPalette();
+  // ── Skin (paleta, atlas y efectos de pantalla) ─────────────────────────────
+  let palette: Palette;
+  let art: FruitArt;
+  let vignette: CanvasGradient | null = null;
+
+  function applyPalette(skin: SkinId) {
+    palette = PALETTES[skin]();
+    art = fruitArt(skin, palette);
+    vignette = null;
+    if (palette.vignette > 0) {
+      vignette = ctx!.createRadialGradient(
+        W / 2,
+        H / 2,
+        H * 0.45,
+        W / 2,
+        H / 2,
+        W * 0.65,
+      );
+      vignette.addColorStop(0, "rgba(0, 0, 0, 0)");
+      vignette.addColorStop(1, `rgba(0, 0, 0, ${palette.vignette})`);
+    }
+  }
+  applyPalette(options?.skin ?? DEFAULT_SKIN);
 
   // ── Estado ──────────────────────────────────────────────────────────────────
   let snake: Cell[]; // cabeza en el índice 0
@@ -251,10 +285,29 @@ export function createSerpentina(
 
   // ── Dibujo ──────────────────────────────────────────────────────────────────
   function draw() {
-    ctx!.clearRect(0, 0, W, H);
-    drawGrid(ctx!, palette);
-    if (fruit) drawFruit(ctx!, palette, fruit, fruitImage);
-    drawSnake(ctx!, palette, snake, dir);
+    const c = ctx!;
+    if (palette.background) {
+      c.fillStyle = palette.background;
+      c.fillRect(0, 0, W, H);
+    } else {
+      c.clearRect(0, 0, W, H);
+    }
+    drawGrid(c, palette);
+    if (fruit) drawFruit(c, palette, fruit, art.image, art.outline);
+    drawSnake(c, palette, snake, dir);
+    drawScreenEffects(c);
+  }
+
+  // Efectos de pantalla del skin (scanlines y viñeta), estáticos: sin parpadeo.
+  function drawScreenEffects(c: CanvasRenderingContext2D) {
+    if (palette.scanlines > 0) {
+      c.fillStyle = `rgba(0, 0, 0, ${palette.scanlines})`;
+      for (let y = 0; y < H; y += 3) c.fillRect(0, y, W, 1);
+    }
+    if (vignette) {
+      c.fillStyle = vignette;
+      c.fillRect(0, 0, W, H);
+    }
   }
 
   // ── Bucle ───────────────────────────────────────────────────────────────────
@@ -314,6 +367,12 @@ export function createSerpentina(
       if (destroyed || finished) return;
       paused = false;
       finish();
+    },
+    setSkin(skin) {
+      if (destroyed) return;
+      applyPalette(skin);
+      // Con el bucle parado (pausa o fin) se redibuja para mostrar el cambio.
+      if (raf === null) draw();
     },
     destroy() {
       destroyed = true;

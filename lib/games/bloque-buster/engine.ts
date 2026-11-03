@@ -23,39 +23,12 @@ import {
   type Palette,
 } from "./entities";
 import { LEVELS } from "./levels";
-import type { GameCallbacks, GameEngine } from "../contract";
+import type { CreateGameOptions, GameCallbacks, GameEngine } from "../contract";
+import { DEFAULT_SKIN, type SkinId } from "../skins";
+import { PALETTES } from "./skins";
 
 const MAX_DT = 50; // ms; evita atravesar bloques y soltar la pelota tras una pausa
 const LAST_LEVEL = LEVELS.length;
-
-// Valores de respaldo iguales a los del tema (app/globals.css).
-const FALLBACK_THEME = {
-  cyan: "#00f5ff",
-  yellow: "#f5ff00",
-  magenta: "#ff006e",
-  green: "#00ff88",
-  ink: "#e6e9ff",
-};
-
-function readPalette(): Palette {
-  const style = getComputedStyle(document.documentElement);
-  const read = (name: string, fallback: string) =>
-    style.getPropertyValue(name).trim() || fallback;
-  const cyan = read("--cyan", FALLBACK_THEME.cyan);
-  return {
-    blocks: {
-      red: "#ff3b3b",
-      yellow: read("--yellow", FALLBACK_THEME.yellow),
-      cyan,
-      magenta: read("--magenta", FALLBACK_THEME.magenta),
-      hotpink: "#ff69b4",
-      green: read("--green", FALLBACK_THEME.green),
-      gray: "#9a9ab0",
-    },
-    paddle: cyan,
-    ball: read("--ink", FALLBACK_THEME.ink),
-  };
-}
 
 function isTextField(target: EventTarget | null) {
   return (
@@ -69,6 +42,7 @@ function isTextField(target: EventTarget | null) {
 export function createBloqueBuster(
   canvas: HTMLCanvasElement,
   callbacks: GameCallbacks,
+  options?: CreateGameOptions,
 ): GameEngine {
   const ctx = canvas.getContext("2d");
   if (!ctx) {
@@ -83,7 +57,27 @@ export function createBloqueBuster(
     };
   }
 
-  const palette = readPalette();
+  // ── Skin (paleta y efectos de pantalla) ─────────────────────────────────────
+  let palette: Palette;
+  let vignette: CanvasGradient | null = null;
+
+  function applyPalette(skin: SkinId) {
+    palette = PALETTES[skin]();
+    vignette = null;
+    if (palette.vignette > 0) {
+      vignette = ctx!.createRadialGradient(
+        W / 2,
+        H / 2,
+        H * 0.45,
+        W / 2,
+        H / 2,
+        W * 0.65,
+      );
+      vignette.addColorStop(0, "rgba(0, 0, 0, 0)");
+      vignette.addColorStop(1, `rgba(0, 0, 0, ${palette.vignette})`);
+    }
+  }
+  applyPalette(options?.skin ?? DEFAULT_SKIN);
 
   // Cada reproducción usa un clon para que los sonidos puedan solaparse.
   const bounceSound = new Audio("/games/bloque-buster/ball-bounce.mp3");
@@ -277,13 +271,31 @@ export function createBloqueBuster(
 
   // ── Dibujo ──────────────────────────────────────────────────────────────────
   function draw() {
-    ctx!.clearRect(0, 0, W, H);
+    if (palette.background) {
+      ctx!.fillStyle = palette.background;
+      ctx!.fillRect(0, 0, W, H);
+    } else {
+      ctx!.clearRect(0, 0, W, H);
+    }
     for (const block of blocks) {
       if (block.alive) drawBlock(ctx!, block, palette);
     }
     for (const exp of explosions) drawExplosion(ctx!, exp, palette);
     drawPaddle(ctx!, paddle, palette);
     drawBall(ctx!, ball, palette);
+    drawScreenEffects(ctx!);
+  }
+
+  // Efectos de pantalla del skin (scanlines y viñeta), estáticos: sin parpadeo.
+  function drawScreenEffects(c: CanvasRenderingContext2D) {
+    if (palette.scanlines > 0) {
+      c.fillStyle = `rgba(0, 0, 0, ${palette.scanlines})`;
+      for (let y = 0; y < H; y += 3) c.fillRect(0, y, W, 1);
+    }
+    if (vignette) {
+      c.fillStyle = vignette;
+      c.fillRect(0, 0, W, H);
+    }
   }
 
   // ── Bucle ───────────────────────────────────────────────────────────────────
@@ -345,6 +357,12 @@ export function createBloqueBuster(
       loadLevel(level);
       emit();
       draw();
+    },
+    setSkin(skin) {
+      if (destroyed) return;
+      applyPalette(skin);
+      // Con el bucle parado (pausa o fin) se redibuja para mostrar el cambio.
+      if (raf === null) draw();
     },
     destroy() {
       destroyed = true;

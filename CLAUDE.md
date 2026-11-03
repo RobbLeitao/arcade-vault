@@ -22,6 +22,14 @@ Para añadir un juego a la plataforma (portado desde `references/started-games/`
 - `.claude/skills/spec` y `spec-impl`: de `Klerith/fernando-skills` (registrados en `skills-lock.json`; copia en `.agents/skills/`). Reinstalar con `npx skills@latest add Klerith/fernando-skills`.
 - `.claude/skills/nuevo-juego`: skill propio. `contract.md` (contrato del motor y registro) y `checklist.md` (criterios, plantillas SQL) son la referencia para cualquier juego nuevo.
 
+## Agents
+
+- `.claude/agents/game-planner.md` (Opus): planifica y decide qué juego encaja en la plataforma antes de `/nuevo-juego`. Lee el catálogo (`references/implemented-games.md`, seed de `games`, `references/started-games/`, registro de motores), puntúa 3 candidatos con una rúbrica y recomienda uno con su ficha. No escribe specs ni código.
+- Tiene memoria persistente de proyecto (`memory: project`) en `.claude/agent-memory/game-planner/`: `suggestions.md` registra cada candidato sugerido con su estado (`sugerido`/`recomendado`/`elegido`/`descartado`/`implementado`) y `MEMORY.md` las preferencias del usuario. Se versiona en git; no la borres.
+- Flujo para un juego nuevo: `game-planner` → `/nuevo-juego` → `/spec-impl` → `skin-designer`.
+- `.claude/agents/game-jam.md` (Opus): recibe un tema, diseña un juego original que lo interprete y escribe 3 specs completas del mismo juego en `specs/game-jam/<id>/` (`01-<id>-esencial.md`, `02-<id>-niveles.md`, `03-<id>-ambiciosa.md`), con el formato de las SPEC 07–09. Decide sin preguntar y marca sus decisiones «a revisar». Memoria en `.claude/agent-memory/game-jam/` (`jams.md`); lee la de `game-planner` sin modificarla. Flujo: `game-jam <tema>` → elegir variante → copiarla a `specs/NN-juego-<id>.md` → `/spec-impl`.
+- `.claude/agents/skin-designer.md` (Opus): aplica los skins CLÁSICO (por defecto, arcade plano sin glow), NEÓN (el look actual) y RETRO (CRT/fósforo) a **un solo juego por invocación, el que indique el usuario** (`@skin-designer <id>`); nunca toca otros juegos. Paletas en `lib/games/<carpeta>/skins.ts` con `PALETTES: Record<SkinId, …>`, cambio en caliente con `setSkin`, `skins: true` en `ENGINES` y selector en el menú de pausa solo para esos juegos (localStorage `av:skin:<gameId>`). Verifica contraste en modo oscuro (≥3:1 elementos, ≥4.5:1 texto) y captura cada skin con Playwright en `.playwright-screenshots/skins/`. No hace commits. Estado por juego en `references/game-with-themes.md` (único archivo de `references/` que edita); preferencias en `.claude/agent-memory/skin-designer/MEMORY.md`.
+
 ## Hooks
 
 `.claude/settings.json` runs `.claude/hooks/format-file.mjs` after every Write/Edit: Prettier `--write` and, for JS/TS, `eslint --fix`. ESLint errors block the edit (exit 2) — fix them rather than bypassing. `references/`, `.next` and `node_modules` are skipped.
@@ -47,6 +55,7 @@ Para añadir un juego a la plataforma (portado desde `references/started-games/`
 - `contract.ts` defines `CreateGame(canvas, callbacks) => GameEngine` (pause/resume/restart/end/destroy, optional `goToLevel`) and callbacks for score, lives, level, HUD stats, game over and pause key. Engines are framework-free canvas code.
 - `registry.ts` (`ENGINES`) maps game id → logical canvas size, optional `levels` (level selector in pause) and a dynamic `load()` import (one chunk per engine; may preload assets, e.g. Serpentina sprites).
 - Engines: `asteroids/` (id `rocas`), `caida/`, `bloque-buster/` (5 levels, sounds), `serpentina/` (sprite atlas). Each has `engine.ts` + `entities.ts`. Assets live in `public/games/<id>/`. (see `references\implemented-games.md`) when you need to check which games are implemented and how to implement new ones.
+- Skins: shared base in `lib/games/skins.ts` (`SkinId` = `clasico` default / `neon` / `retro`, `loadSkin`/`saveSkin` in localStorage `av:skin:<gameId>`). An engine with skins exposes the 3 skins (CLÁSICO por defecto, NEÓN, RETRO) in `lib/games/<carpeta>/skins.ts` (`PALETTES: Record<SkinId, …>`), accepts `options.skin`, implements `setSkin` (hot swap) and declares `skins: true` in `ENGINES`, which shows the skin picker in the pause panel. Status per game: `references/game-with-themes.md`.
 - `components/game-canvas.tsx` mounts any registered engine; `components/game-player.tsx` owns HUD, pause, game-over modal and score submission. Games not in `ENGINES` stay simulated.
 - Original sources to port are in `references/started-games/` (reference only, not part of the build).
 

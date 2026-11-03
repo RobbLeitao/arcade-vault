@@ -11,48 +11,21 @@ import {
   collide,
   createBoard,
   drawBlock,
+  drawGhostBlock,
   rotateCW,
   type Board,
   type Palette,
   type Piece,
 } from "./entities";
-import type { GameCallbacks, GameEngine } from "../contract";
+import type { CreateGameOptions, GameCallbacks, GameEngine } from "../contract";
+import { DEFAULT_SKIN, type SkinId } from "../skins";
+import { PALETTES } from "./skins";
 
 const START_INTERVAL = 1000;
 const MIN_INTERVAL = 100;
 const INTERVAL_STEP = 90;
 const MAX_DT = 50; // ms; evita soltar varias filas de golpe tras una pausa
 const ARROW_KEYS = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"];
-
-// Valores de respaldo iguales a los del tema (app/globals.css).
-const FALLBACK_THEME = {
-  cyan: "#00f5ff",
-  yellow: "#f5ff00",
-  magenta: "#ff006e",
-  green: "#00ff88",
-  dim: "#8a8fb5",
-};
-
-function readPalette(): Palette {
-  const style = getComputedStyle(document.documentElement);
-  const read = (name: string, fallback: string) =>
-    style.getPropertyValue(name).trim() || fallback;
-  return {
-    colors: [
-      null,
-      read("--cyan", FALLBACK_THEME.cyan), // I
-      read("--yellow", FALLBACK_THEME.yellow), // O
-      read("--magenta", FALLBACK_THEME.magenta), // T
-      read("--green", FALLBACK_THEME.green), // S
-      "#ff6b6b", // Z
-      "#7aa2ff", // J
-      "#ff9f1c", // L
-      "#9a9ab0", // N (tuerca)
-    ],
-    grid: "rgba(0, 245, 255, 0.08)",
-    label: read("--ink-dim", FALLBACK_THEME.dim),
-  };
-}
 
 function isTextField(target: EventTarget | null) {
   return (
@@ -77,6 +50,7 @@ function randomPiece(): Piece {
 export function createCaida(
   canvas: HTMLCanvasElement,
   callbacks: GameCallbacks,
+  options?: CreateGameOptions,
 ): GameEngine {
   const ctx = canvas.getContext("2d");
   if (!ctx) {
@@ -90,7 +64,30 @@ export function createCaida(
     };
   }
 
-  const palette = readPalette();
+  // ── Skin (paleta y efectos de pantalla) ─────────────────────────────────────
+  let palette: Palette;
+  let vignette: CanvasGradient | null = null;
+
+  function applyPalette(skin: SkinId) {
+    palette = PALETTES[skin]();
+    vignette = null;
+    if (palette.vignette > 0) {
+      // Canvas estrecho (420×600): radios según la diagonal para que la viñeta
+      // solo oscurezca las esquinas, con transición suave.
+      const corner = Math.hypot(W / 2, H / 2);
+      vignette = ctx!.createRadialGradient(
+        W / 2,
+        H / 2,
+        corner * 0.6,
+        W / 2,
+        H / 2,
+        corner,
+      );
+      vignette.addColorStop(0, "rgba(0, 0, 0, 0)");
+      vignette.addColorStop(1, `rgba(0, 0, 0, ${palette.vignette})`);
+    }
+  }
+  applyPalette(options?.skin ?? DEFAULT_SKIN);
 
   // ── Estado ──────────────────────────────────────────────────────────────────
   let board: Board;
@@ -281,18 +278,18 @@ export function createCaida(
     ctx!.stroke();
   }
 
-  function drawPiece(piece: Piece, y: number, alpha = 1) {
+  function drawPiece(piece: Piece, y: number) {
     for (let r = 0; r < piece.shape.length; r++)
       for (let c = 0; c < piece.shape[r].length; c++)
         if (piece.shape[r][c])
-          drawBlock(
-            ctx!,
-            palette,
-            piece.x + c,
-            y + r,
-            piece.shape[r][c],
-            alpha,
-          );
+          drawBlock(ctx!, palette, piece.x + c, y + r, piece.shape[r][c]);
+  }
+
+  function drawGhost(piece: Piece, y: number) {
+    for (let r = 0; r < piece.shape.length; r++)
+      for (let c = 0; c < piece.shape[r].length; c++)
+        if (piece.shape[r][c])
+          drawGhostBlock(ctx!, palette, piece.x + c, y + r, piece.shape[r][c]);
   }
 
   function drawNext() {
@@ -315,23 +312,41 @@ export function createCaida(
 
   function draw() {
     ctx!.clearRect(0, 0, W, H);
+    if (palette.background) {
+      ctx!.fillStyle = palette.background;
+      ctx!.fillRect(0, 0, W, H);
+    }
     drawGrid();
 
     for (let r = 0; r < ROWS; r++)
       for (let c = 0; c < COLS; c++)
         drawBlock(ctx!, palette, c, r, board[r][c]);
 
-    drawPiece(current, ghostY(), 0.2);
+    drawGhost(current, ghostY());
     drawPiece(current, current.y);
 
     // Separador entre tablero y panel lateral
-    ctx!.strokeStyle = palette.grid;
+    ctx!.strokeStyle = palette.separator;
+    ctx!.lineWidth = 1;
     ctx!.beginPath();
     ctx!.moveTo(BOARD_W + 0.5, 0);
     ctx!.lineTo(BOARD_W + 0.5, H);
     ctx!.stroke();
 
     drawNext();
+    drawScreenEffects();
+  }
+
+  // Efectos de pantalla del skin (scanlines y viñeta), estáticos: sin parpadeo.
+  function drawScreenEffects() {
+    if (palette.scanlines > 0) {
+      ctx!.fillStyle = `rgba(0, 0, 0, ${palette.scanlines})`;
+      for (let y = 0; y < H; y += 3) ctx!.fillRect(0, y, W, 1);
+    }
+    if (vignette) {
+      ctx!.fillStyle = vignette;
+      ctx!.fillRect(0, 0, W, H);
+    }
   }
 
   // ── Bucle ───────────────────────────────────────────────────────────────────
@@ -394,6 +409,12 @@ export function createCaida(
       if (destroyed || finished) return;
       paused = false;
       finish();
+    },
+    setSkin(skin) {
+      if (destroyed) return;
+      applyPalette(skin);
+      // Con el bucle parado (pausa o fin) se redibuja para mostrar el cambio.
+      if (raf === null) draw();
     },
     destroy() {
       destroyed = true;

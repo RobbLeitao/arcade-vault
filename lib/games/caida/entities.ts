@@ -61,10 +61,24 @@ export interface Piece {
   y: number; // fila; 0 al aparecer
 }
 
+export type BlockPattern = "solid" | "hollow" | "striped";
+
+// Paleta y efectos de un skin (ver ./skins.ts).
 export interface Palette {
   colors: (string | null)[]; // índice 0 = null; 1..8 = color de cada pieza
-  grid: string; // línea de la cuadrícula
+  patterns: (BlockPattern | null)[] | null; // mismo índice; null = todos macizos
+  grid: string; // línea de la cuadrícula (decorativa)
+  separator: string; // línea entre tablero y panel lateral
   label: string; // texto "SIGUIENTE"
+  background: string | null; // null = transparente (fondo de .crt-screen)
+  glow: number; // multiplicador del shadowBlur de los bloques (0 = sin glow)
+  highlight: string | null; // franja superior clara del bloque
+  shade: string | null; // franja inferior oscura (biselado)
+  ghost: "fill" | "outline" | "dashed"; // dibujo de la pieza fantasma
+  ghostAlpha: number;
+  ghostColor: string | null; // null = color de la pieza
+  scanlines: number; // opacidad de las scanlines (0 = sin)
+  vignette: number; // opacidad de la viñeta en las esquinas (0 = sin)
 }
 
 export function createBoard(): Board {
@@ -100,8 +114,8 @@ export function rotateCW(shape: number[][]): number[][] {
   return result;
 }
 
-// Bloque neón en coordenadas de celda (x, y); el llamante traslada el contexto
-// si dibuja fuera del tablero.
+// Bloque en coordenadas de celda (x, y) con el estilo del skin; el llamante
+// traslada el contexto si dibuja fuera del tablero.
 export function drawBlock(
   ctx: CanvasRenderingContext2D,
   palette: Palette,
@@ -112,17 +126,56 @@ export function drawBlock(
 ) {
   const color = palette.colors[colorIndex];
   if (!color) return;
+  const pattern = palette.patterns?.[colorIndex] ?? "solid";
   const px = x * BLOCK + 1;
   const py = y * BLOCK + 1;
   const size = BLOCK - 2;
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.shadowColor = color;
-  ctx.shadowBlur = 8;
+  ctx.shadowBlur = 8 * palette.glow;
   ctx.fillStyle = color;
   ctx.fillRect(px, py, size, size);
   ctx.shadowBlur = 0;
-  ctx.fillStyle = "rgba(255,255,255,0.14)";
-  ctx.fillRect(px, py, size, 4);
+  if (pattern !== "solid") {
+    ctx.fillStyle = palette.background ?? "#000";
+    if (pattern === "hollow") {
+      ctx.fillRect(px + 6, py + 6, size - 12, size - 12);
+    } else {
+      for (let sx = px + 5; sx < px + size - 4; sx += 7)
+        ctx.fillRect(sx, py + 4, 3, size - 8);
+    }
+  }
+  if (palette.highlight) {
+    ctx.fillStyle = palette.highlight;
+    ctx.fillRect(px, py, size, 4);
+  }
+  if (palette.shade) {
+    ctx.fillStyle = palette.shade;
+    ctx.fillRect(px, py + size - 3, size, 3);
+  }
+  ctx.restore();
+}
+
+// Celda de la pieza fantasma (dónde caerá la pieza actual).
+export function drawGhostBlock(
+  ctx: CanvasRenderingContext2D,
+  palette: Palette,
+  x: number,
+  y: number,
+  colorIndex: number,
+) {
+  if (palette.ghost === "fill") {
+    drawBlock(ctx, palette, x, y, colorIndex, palette.ghostAlpha);
+    return;
+  }
+  const color = palette.ghostColor ?? palette.colors[colorIndex];
+  if (!color) return;
+  ctx.save();
+  ctx.globalAlpha = palette.ghostAlpha;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  if (palette.ghost === "dashed") ctx.setLineDash([4, 4]);
+  ctx.strokeRect(x * BLOCK + 3, y * BLOCK + 3, BLOCK - 6, BLOCK - 6);
   ctx.restore();
 }
