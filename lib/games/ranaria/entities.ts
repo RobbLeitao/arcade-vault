@@ -1,4 +1,7 @@
 // RANARIA: constantes, tipos, carriles y dibujo con primitivas canvas (SPEC 11).
+// Las formas se pintan una vez en sprites cacheados (SPEC 12, ver sprites.ts).
+
+import type { Sprite, SpriteSet } from "./sprites";
 
 export const CELL = 40;
 export const COLS = 16;
@@ -151,8 +154,8 @@ export function buildLanes(level: number): Lane[] {
 
 // ── Dibujo ────────────────────────────────────────────────────────────────────
 
-const GLOW = 10; // shadowBlur base, escalado por palette.glow
-const FROG_GLOW = 18;
+export const GLOW = 10; // shadowBlur base, escalado por palette.glow
+export const FROG_GLOW = 18;
 
 function glow(ctx: CanvasRenderingContext2D, color: string, palette: Palette) {
   ctx.shadowColor = color;
@@ -241,35 +244,49 @@ export function drawBoard(
   ctx.restore();
 }
 
-/** Entidades de un carril; las que están fuera del canvas se recortan solas. */
+/** Copia un sprite con su origen lógico en (x, y), redondeado a píxel entero. */
+function blit(
+  ctx: CanvasRenderingContext2D,
+  sprite: Sprite,
+  x: number,
+  y: number,
+) {
+  ctx.drawImage(
+    sprite.canvas,
+    Math.round(x) - sprite.ox,
+    Math.round(y) - sprite.oy,
+  );
+}
+
+/** Clave del sprite de una entidad (ver `SpriteSet` en sprites.ts). */
+function spriteKey(e: Entity, dir: 1 | -1): string {
+  switch (e.type) {
+    case "car":
+      return `car:${e.variant % 3}:${dir}`;
+    case "truck":
+      return `truck:${e.width}:${dir}`;
+    case "log":
+      return `log:${e.width}`;
+    case "turtle":
+      return `turtle:${e.width}:${e.submerged ? "down" : "up"}`;
+  }
+}
+
+/** Entidades de un carril, copiadas desde la caché de sprites (sin shadowBlur). */
 export function drawLane(
   ctx: CanvasRenderingContext2D,
   palette: Palette,
   lane: Lane,
+  sprites: SpriteSet,
 ) {
-  ctx.save();
+  const y = lane.row * CELL;
   for (const e of lane.entities) {
-    const x = e.col * CELL;
-    const y = lane.row * CELL;
-    switch (e.type) {
-      case "car":
-        drawCar(ctx, palette, x, y, e.variant, lane.dir);
-        break;
-      case "truck":
-        drawTruck(ctx, palette, x, y, e.width, lane.dir);
-        break;
-      case "log":
-        drawLog(ctx, palette, x, y, e.width);
-        break;
-      case "turtle":
-        drawTurtles(ctx, palette, x, y, e.width, e.submerged === true);
-        break;
-    }
+    // Las que están fuera del canvas se recortan solas.
+    blit(ctx, sprites.get(spriteKey(e, lane.dir), palette), e.col * CELL, y);
   }
-  ctx.restore();
 }
 
-function drawCar(
+export function drawCar(
   ctx: CanvasRenderingContext2D,
   palette: Palette,
   x: number,
@@ -300,7 +317,7 @@ function drawCar(
   ctx.fillRect(wx, y + 14, 8, CELL - 28);
 }
 
-function drawTruck(
+export function drawTruck(
   ctx: CanvasRenderingContext2D,
   palette: Palette,
   x: number,
@@ -329,7 +346,7 @@ function drawTruck(
   noGlow(ctx);
 }
 
-function drawLog(
+export function drawLog(
   ctx: CanvasRenderingContext2D,
   palette: Palette,
   x: number,
@@ -359,7 +376,7 @@ function drawLog(
   ctx.globalAlpha = 1;
 }
 
-function drawTurtles(
+export function drawTurtles(
   ctx: CanvasRenderingContext2D,
   palette: Palette,
   x: number,
@@ -427,7 +444,7 @@ const FACING_ANGLE: Record<Direction, number> = {
 };
 
 /** Rana centrada en (cx, cy), mirando hacia `facing`; con patas extendidas si salta. */
-function drawFrogShape(
+export function drawFrogShape(
   ctx: CanvasRenderingContext2D,
   palette: Palette,
   cx: number,
@@ -496,6 +513,7 @@ export function drawFrog(
   ctx: CanvasRenderingContext2D,
   palette: Palette,
   frog: Frog,
+  sprites: SpriteSet,
 ) {
   let col = frog.col;
   let row = frog.row;
@@ -504,12 +522,6 @@ export function drawFrog(
     col = frog.fromCol + (frog.targetCol - frog.fromCol) * t;
     row = frog.fromRow + (frog.targetRow - frog.fromRow) * t;
   }
-  drawFrogShape(
-    ctx,
-    palette,
-    col * CELL + CELL / 2,
-    row * CELL + CELL / 2,
-    frog.facing,
-    frog.animating,
-  );
+  const key = `frog:${frog.facing}:${frog.animating ? "jump" : "rest"}`;
+  blit(ctx, sprites.get(key, palette), col * CELL, row * CELL);
 }
